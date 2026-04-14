@@ -1,0 +1,23 @@
+{
+  "name": "report-collector",
+  "version": "1.0.0",
+  "description": "Yatırım piyasası araştırma raporlarını otomatik toplayan CLI aracı",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "start:debug": "tsx src/index.ts --debug",
+    "extract": "tsx src/analyzer/extract-text.ts",
+    "forecast-check": "tsx src/analyzer/forecast-check.ts",
+    "doc-score": "tsx src/analyzer/doc-score.ts",
+    "forecast-score": "tsx src/analyzer/forecast-score.ts",
+    "transcript": "python3 src/transcript/fetch-transcripts.py"
+  },
+  "dependencies": {
+    "pdf-parse": "^2.4.5",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

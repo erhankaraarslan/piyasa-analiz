@@ -1,0 +1,45 @@
+{
+  // ── Custom Agents ──
+  // .github/agents/ klasöründeki .agent.md dosyalarını tanı (varsayılan)
+  "chat.agentFilesLocations": {
+    ".github/agents": true
+  },
+
+  // ── Agent Skills ──
+  // .github/skills/ klasöründeki SKILL.md dosyalarını tanı (varsayılan)
+  "chat.skillsLocations": {
+    ".github/skills": true
+  },
+
+  // ── Custom Instructions ──
+  // .github/instructions/ klasöründeki .instructions.md dosyalarını tanı
+  "chat.instructionsFilesLocations": {
+    ".github/instructions": true
+  },
+
+  // applyTo glob pattern'ine göre instruction'ları otomatik uygula
+  "chat.includeApplyingInstructions": true,
+
+  // Markdown link ile referans verilen instruction'ları dahil et
+  "chat.includeReferencedInstructions": true,
+
+  // ── Always-on Instructions ──
+  // AGENTS.md dosyasını tanı ve otomatik uygula
+  "chat.useAgentsMdFile": true,
+
+  // Alt klasörlerdeki AGENTS.md dosyalarını da tara (experimental)
+  "chat.useNestedAgentsMdFiles": true,
+
+  // ── Subagents ──
+  // Subagent'ların kendi subagent'larını çalıştırmasına izin ver (nested)
+  "chat.subagents.allowInvocationsFromSubagents": true,
+
+  // ── Agent Hooks (Preview) ──
+  // Agent-scoped hook'ları etkinleştir (.agent.md frontmatter'daki hooks)
+  "chat.useCustomAgentHooks": true,
+
+  // Hook dosya konumlarını tanımla
+  "chat.hookFilesLocations": {
+    ".github/hooks": true
+  }
+}
