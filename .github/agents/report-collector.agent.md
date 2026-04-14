@@ -1,5 +1,5 @@
 ---
-description: "Rapor toplama agent'ı. Use when: rapor indir, PDF indir, scraper çalıştır, yeni rapor topla, Danske Bank raporları indir, kaynak ekle, scraper ekle."
+description: "Rapor toplama agent'ı. Use when: rapor indir, PDF indir, scraper çalıştır, yeni rapor topla, Danske Bank raporları indir, ICBC Yatırım raporları indir, Deniz Yatırım raporları indir, kaynak ekle, scraper ekle."
 tools: [execute, read, edit, search]
 disable-model-invocation: false
 ---

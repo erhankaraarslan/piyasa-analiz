@@ -292,12 +292,27 @@ Auth gerektiren sitelerde Playwright download event'i kullanılabilir.
 
 ```
 raporlar/
-└── danske-bank/
-    └── fx-forecast-update/
-        ├── 2025-06-23_fx-forecast-update-june-23-2025.pdf
-        ├── 2025-07-22_fx-forecast-update-july-22-2025.pdf
+├── danske-bank/
+│   └── fx-forecast-update/
+│       ├── 2025-06-23_fx-forecast-update-june-23-2025.pdf
+│       └── ...
+├── icbc-yatirim/
+│   └── model-portfoy/
+│       ├── 2026-03-12_model-portfoy-guncelleme-mart-2026.pdf
+│       └── ...
+└── deniz-yatirim/
+    └── gunluk-bulten/
+        ├── 2026-04-14_gunluk-bulten-14-04-2026.pdf
         └── ...
 ```
+
+## Mevcut Scraper'lar
+
+| Scraper | Dosya | Strateji | Varlık Türü |
+|---------|-------|----------|-------------|
+| Danske Bank | `danske-bank.ts` | API intercept + HTML fallback | FX pariteleri |
+| ICBC Yatırım | `icbc-yatirim.ts` | Statik HTML scraping (PDF linkleri) | BIST hisse senetleri |
+| Deniz Yatırım | `deniz-yatirim.ts` | AJAX detail + PDF URL çıkarma | BIST hisse senetleri |
 
 ## Kısıtlamalar
 

@@ -106,12 +106,20 @@ Başarı Skoru = (Yön İsabeti × 100 × 0.40) + (Hedef Yakınlığı × 0.30) 
 
 ### 6. Trailing Benchmark (Ref. Beklenen Getiri)
 
-Tahmin tarihinden N ay **önceki** spot fiyat, Frankfurter API'den çekilir:
-- N = vade süresi (+1M → 1 ay, +3M → 3 ay, vb.)
-- `Ref. Beklenen = (Spot_tahminTarihi − Spot_geçmiş) / Spot_geçmiş × 100`
-- Bu, varlığın son N aydaki momentum'unu temsil eder
+Tahmin tarihinden N ay **önceki** spot fiyat çekilir:
+- **FX pariteleri**: Frankfurter API (EUR-bazlı cross rates)
+- **BIST hisse senetleri**: Yahoo Finance v8 chart API (ticker.IS formatı)
+- **BIST100 endeksi**: Yahoo Finance (XU100.IS)
 
-> **Not**: Şu an sadece FX pariteleri desteklenir (Frankfurter API). Hisseler ileride eklenecek.
+Hesaplama:
+- N = vade süresi (+1M → 1 ay, +3M → 3 ay, vb.)
+- FX: `Ref. Beklenen = (Spot_tahminTarihi − Spot_geçmiş) / Spot_geçmiş × 100` (aynı parite trailing)
+- Hisseler: `Ref. Beklenen = (BIST100_tahminTarihi − BIST100_geçmiş) / BIST100_geçmiş × 100` (BIST100 trailing)
+- Hisseler için Ref. Gerçekleşen Getiri = BIST100'ün hedef tarihindeki getirisi (spot→hedef dönemi)
+
+**Benchmark kuralı:**
+- FX pariteleri → benchmark = aynı parite (self-benchmark)
+- Hisse senetleri → benchmark = BIST100 (endeks benchmark)
 
 ### 7. Çıktı Dosyaları
 

@@ -1,6 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
 
+const REQUEST_TIMEOUT_MS = 8000;
+const TRAILING_FETCH_CONCURRENCY = 24;
+
+async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // ── Types ──
 
 interface TahminlerRow {
@@ -58,6 +71,68 @@ const FRANKFURTER_CURRENCIES = new Set([
 const METALS = new Set(["XAU", "XAG"]);
 
 /**
+ * Hisse senedi mi (BIST ticker) yoksa FX paritesi mi kontrol et.
+ * "/" içermeyen ve GRAM-ALTIN/GRAM-GUMUS/BIST100 olmayan varlıklar hisse olarak kabul edilir.
+ */
+function isStock(pair: string): boolean {
+  return !pair.includes("/") && pair !== "GRAM-ALTIN" && pair !== "GRAM-GUMUS" && pair !== "BIST100";
+}
+
+/**
+ * Yahoo Finance v8 chart API üzerinden hisse/endeks fiyatı çeker.
+ * Ticker formatı: AKBNK.IS (BIST), XU100.IS (BIST100 endeksi).
+ * Hafta sonu/tatil günlerinde veri olmayabileceği için ±7 gün aralık kullanır.
+ */
+async function fetchStockPrice(ticker: string, date?: string): Promise<number | null> {
+  const yahooTicker = ticker.endsWith(".IS") ? ticker : `${ticker}.IS`;
+  const targetDate = date ?? new Date().toISOString().slice(0, 10);
+  const targetTime = new Date(targetDate + "T00:00:00Z").getTime() / 1000;
+
+  // ±7 gün aralık (hafta sonu/tatil toleransı)
+  const period1 = Math.floor(targetTime - 7 * 86400);
+  const period2 = Math.floor(targetTime + 7 * 86400);
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?period1=${period1}&period2=${period2}&interval=1d`;
+
+  try {
+    const res = await fetchWithTimeout(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      chart: {
+        result: Array<{
+          timestamp: number[];
+          indicators: { quote: Array<{ close: (number | null)[] }> };
+        }> | null;
+      };
+    };
+
+    const result = data.chart?.result?.[0];
+    if (!result?.timestamp?.length) return null;
+
+    const timestamps = result.timestamp;
+    const closes = result.indicators.quote[0].close;
+    const targetMs = targetTime * 1000;
+
+    // En yakın tarihi bul
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < timestamps.length; i++) {
+      const dist = Math.abs(timestamps[i] * 1000 - targetMs);
+      if (dist < bestDist && closes[i] !== null) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+
+    return closes[bestIdx] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * ECB Statistical Data Warehouse'dan metal fiyatı çeker (EUR bazlı, troy ons).
  */
 async function fetchMetalRateECB(metal: string, date?: string): Promise<number | null> {
@@ -69,7 +144,7 @@ async function fetchMetalRateECB(metal: string, date?: string): Promise<number |
   const url = `https://data-api.ecb.europa.eu/service/data/EXR/D.${metal}.EUR.SP00.A?format=csvdata&startPeriod=${startStr}&endPeriod=${d}&detail=dataonly`;
 
   try {
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return null;
     const csv = await res.text();
     const lines = csv.trim().split("\n");
@@ -120,8 +195,11 @@ async function fetchRate(pair: string, date?: string): Promise<number | null> {
     return null;
   }
 
-  // ── BIST100: API desteklenmiyor ──
-  if (pair === "BIST100") return null;
+  // ── BIST100: Yahoo Finance ──
+  if (pair === "BIST100") return fetchStockPrice("XU100", date);
+
+  // ── BIST hisse senetleri: Yahoo Finance ──
+  if (isStock(pair)) return fetchStockPrice(pair, date);
 
   // ── Frankfurter API ──
   const parsed = parseApiPair(pair);
@@ -129,24 +207,28 @@ async function fetchRate(pair: string, date?: string): Promise<number | null> {
 
   const [pairBase, pairQuote] = pair.split("/");
 
-  if (pairBase === "EUR") {
+  try {
+    if (pairBase === "EUR") {
+      const endpoint = date
+        ? `https://api.frankfurter.app/${date}?from=EUR&to=${pairQuote}`
+        : `https://api.frankfurter.app/latest?from=EUR&to=${pairQuote}`;
+      const res = await fetchWithTimeout(endpoint);
+      if (!res.ok) return null;
+      const data = (await res.json()) as { rates: Record<string, number> };
+      return data.rates[pairQuote] ?? null;
+    }
+
     const endpoint = date
-      ? `https://api.frankfurter.app/${date}?from=EUR&to=${pairQuote}`
-      : `https://api.frankfurter.app/latest?from=EUR&to=${pairQuote}`;
-    const res = await fetch(endpoint);
+      ? `https://api.frankfurter.app/${date}?from=EUR&to=${pairBase},${pairQuote}`
+      : `https://api.frankfurter.app/latest?from=EUR&to=${pairBase},${pairQuote}`;
+    const res = await fetchWithTimeout(endpoint);
     if (!res.ok) return null;
     const data = (await res.json()) as { rates: Record<string, number> };
-    return data.rates[pairQuote] ?? null;
+    if (!data.rates[pairBase] || !data.rates[pairQuote]) return null;
+    return data.rates[pairQuote] / data.rates[pairBase];
+  } catch {
+    return null;
   }
-
-  const endpoint = date
-    ? `https://api.frankfurter.app/${date}?from=EUR&to=${pairBase},${pairQuote}`
-    : `https://api.frankfurter.app/latest?from=EUR&to=${pairBase},${pairQuote}`;
-  const res = await fetch(endpoint);
-  if (!res.ok) return null;
-  const data = (await res.json()) as { rates: Record<string, number> };
-  if (!data.rates[pairBase] || !data.rates[pairQuote]) return null;
-  return data.rates[pairQuote] / data.rates[pairBase];
 }
 
 // ── Helpers ──
@@ -318,20 +400,30 @@ async function main() {
     if (t["Yön İsabeti"] === "⏳") continue;
     const vadeAy = parseVadeMonths(t["Vade"]);
     const trailingDate = subtractMonths(t["Tahmin Tarihi"], vadeAy);
-    trailingRequests.add(`${t["Varlık"]}:${trailingDate}`);
+    const trailingPair = isStock(t["Varlık"]) ? "BIST100" : t["Varlık"];
+    trailingRequests.add(`${trailingPair}:${trailingDate}`);
+    // Hisseler için BIST100 spot/hedef tarihi de lazım
+    if (isStock(t["Varlık"])) {
+      trailingRequests.add(`BIST100:${t["Tahmin Tarihi"]}`);
+      trailingRequests.add(`BIST100:${t["Hedef Tarihi"]}`);
+    }
   }
 
-  console.log(`📡 ${trailingRequests.size} trailing fiyat sorgulanacak (Frankfurter API)\n`);
+  console.log(`📡 ${trailingRequests.size} trailing fiyat sorgulanacak (Frankfurter + Yahoo Finance API)\n`);
 
   // Pre-fetch trailing rates
   let fetchCount = 0;
-  for (const req of trailingRequests) {
-    const [pair, date] = req.split(":");
-    await fetchRateCached(pair, date);
-    fetchCount++;
-    if (fetchCount % 10 === 0) {
-      console.log(`   ${fetchCount}/${trailingRequests.size} sorgu tamamlandı...`);
-    }
+  const requestList = [...trailingRequests];
+  for (let i = 0; i < requestList.length; i += TRAILING_FETCH_CONCURRENCY) {
+    const batch = requestList.slice(i, i + TRAILING_FETCH_CONCURRENCY);
+    await Promise.all(batch.map(async (req) => {
+      const [pair, date] = req.split(":");
+      await fetchRateCached(pair, date);
+      fetchCount++;
+      if (fetchCount % 10 === 0 || fetchCount === requestList.length) {
+        console.log(`   ${fetchCount}/${requestList.length} sorgu tamamlandı...`);
+      }
+    }));
   }
   console.log(`   ✅ ${fetchCount} trailing fiyat sorgulandı\n`);
 
@@ -347,8 +439,8 @@ async function main() {
     const gerceklesenStr = t["Gerçekleşen Fiyat"];
     const beklesik = t["Yön İsabeti"] === "⏳";
 
-    // Benchmark: FX için aynı parite (hisseler ileride BIST100)
-    const benchmark = varlik;
+    // Benchmark: FX için aynı parite, hisseler için BIST100
+    const benchmark = isStock(varlik) ? "BIST100" : varlik;
 
     // Beklenen Getiri
     const beklenenGetiri = spot > 0 ? (hedef - spot) / spot * 100 : 0;
@@ -419,16 +511,37 @@ async function main() {
 
     // Trailing benchmark: spot N ay öncesindeki fiyat
     const trailingDate = subtractMonths(t["Tahmin Tarihi"], vadeAy);
-    const spotTrailing = await fetchRateCached(varlik, trailingDate);
+    const trailingPair = isStock(varlik) ? "BIST100" : varlik;
+    const spotTrailing = await fetchRateCached(trailingPair, trailingDate);
 
     let refBeklenen: number | null = null;
     if (spotTrailing !== null && spotTrailing > 0) {
-      refBeklenen = (spot - spotTrailing) / spotTrailing * 100;
+      // Hisseler için: BIST100 spot'unu aynı tarihte çek
+      if (isStock(varlik)) {
+        const bist100Current = await fetchRateCached("BIST100", t["Tahmin Tarihi"]);
+        if (bist100Current !== null) {
+          refBeklenen = (bist100Current - spotTrailing) / spotTrailing * 100;
+        }
+      } else {
+        refBeklenen = (spot - spotTrailing) / spotTrailing * 100;
+      }
     }
 
-    // Ref. Gerçekleşen Getiri = yalın benchmark piyasa getirisi
+    // Ref. Gerçekleşen Getiri
     // FX: benchmark = aynı parite → = Gerçekleşen Getiri
-    const refGerceklesen = gerceklesenGetiri;
+    // Hisse: benchmark = BIST100 → BIST100 gerçekleşen getirisi
+    let refGerceklesen: number;
+    if (isStock(varlik)) {
+      const bist100Current = await fetchRateCached("BIST100", t["Tahmin Tarihi"]);
+      const bist100Target = await fetchRateCached("BIST100", t["Hedef Tarihi"]);
+      if (bist100Current !== null && bist100Target !== null && bist100Current > 0) {
+        refGerceklesen = (bist100Target - bist100Current) / bist100Current * 100;
+      } else {
+        refGerceklesen = gerceklesenGetiri;
+      }
+    } else {
+      refGerceklesen = gerceklesenGetiri;
+    }
 
     // Alpha & RefAlpha
     let alpha: number | null = null;

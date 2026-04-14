@@ -34,6 +34,8 @@ Kod değişikliklerinde aşağıdaki durumlarda `README.md` dosyasını güncell
 - Tahmin skorlama sütunları değiştiğinde `.github/skills/forecast-scoring/SKILL.md`, `src/analyzer/forecast-score.ts` ve `README.md` "Tahmin Skorlama" tablosunu güncelle
 - `forecast-check.ts` script çıktısı `forecasts-results.json` olarak kaydedilir — Belgeler'in Tahmin Sapması, Tahminler'in Gerçekleşen Fiyat/Sapma/Yön İsabeti ve Skorlama'nın Alpha sütunları bu dosyadan beslenir
 - `doc-score.ts` script çıktısı `dokuman_skorlari.md/csv` olarak kaydedilir — belgeler ve tahminler CSV + forecasts-results.json'dan hesaplanır
-- `forecast-score.ts` script çıktısı `tahmin_skorlari.md/csv` olarak kaydedilir — tahminler CSV + Frankfurter API trailing verisinden hesaplanır
-- `forecasts.json` formatında consensus ve forward değerleri de yer alır — rapordaki ilgili satırlardan çıkarılır
+- `forecast-score.ts` script çıktısı `tahmin_skorlari.md/csv` olarak kaydedilir — tahminler CSV + Frankfurter API (FX) ve Yahoo Finance API (BIST hisseleri) trailing verisinden hesaplanır
+- `forecasts.json` formatında consensus ve forward değerleri de yer alır — rapordaki ilgili satırlardan çıkarılır; hisse senetlerinde sadece forecast12m doldurulur
+- FX pariteleri Frankfurter API, BIST hisse senetleri Yahoo Finance v8 chart API (ticker.IS formatı) üzerinden fiyatlanır
+- Hisse senedi tahminlerinde benchmark = BIST100 (XU100.IS); FX'te benchmark = aynı parite
 - Varsayım Gerçekleşme sadece ardışık raporların cross-reference'ı ile belirlenir — dış kaynak kullanılmaz

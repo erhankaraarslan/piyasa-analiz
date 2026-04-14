@@ -115,7 +115,7 @@ Tahmin bazında granüler izleme. Her satır = bir rapordaki bir varlık × bir 
 | 2 | **Kurum** | Yayınlayan kurum | Zaten biliniyor (Danske Bank vb.) |
 | 3 | **Analist** | Pariteyi analiz eden kişi (ad soyad) | Her parite sayfasının **alt kısmındaki** imza satırından (örn. "Mohamad Al-Saraf, Associate, moals@danskebank.dk" → "Mohamad Al-Saraf"). Sadece isim yazılır, unvan/email yazılmaz. Bulunamazsa "Ekip" yaz. |
 | 4 | **Format** | Belge formatı | Her zaman "PDF" (ileride farklı formatlar eklenebilir) |
-| 5 | **Varlık** | Parite adı | Forecast tablosundan (örn. EUR/USD) |
+| 5 | **Varlık** | Parite adı veya hisse ticker'ı | Forecast tablosundan (FX: EUR/USD; Hisse: AKBNK) |
 | 6 | **Vade** | Tahmin vadesi | +1M, +3M, +6M, +12M |
 | 7 | **Hedef Tarihi** | Tahmin Tarihi + Vade süresi | Hesaplama: date + vade |
 | 8 | **Spot Fiyat** | Raporun yayın tarihindeki cari kur | Raporun forecast tablosundaki "Spot" sütunundan |
@@ -317,3 +317,56 @@ Transkriptte geçen sözel tahminleri tespit et ve yapılandır. Örnekler:
 - `forecasts.json` tek dosyadır — hem PDF hem transkript tahminleri içerir
 - `forecast-check.ts` parite bazlı çalışır; TRY çiftleri frankfurter.app'te desteklenmiyorsa ilgili satırlar Gerçekleşen/Sapma alanları "—" olur
 - Skorlama scriptleri (`doc-score.ts`, `forecast-score.ts`) Format="Video" kaydını otomatik olarak kapsar
+
+---
+
+## ICBC Yatırım Model Portföy Raporları
+
+ICBC Yatırım'ın Model Portföy raporları **BIST hisse senedi** tahminleri içerir. FX raporlarından farklı olarak:
+
+### Rapor Yapısı
+- **4 sayfa PDF**, Türkçe
+- **~9 hisse** seçimi, hepsi "AL" (Buy) önerisi
+- Her hisse için: Ticker, Şirket, Öneri, Fiyat TL, Hedef TL, Yukarı Potansiyel %, PD US$mn, Hacim, F/K, Sektörel çarpan
+- **BIST100 hedef** fiyatı (yıl sonu)
+- Portföye eklenen/çıkarılan hisseler ve gerekçeleri
+
+### Varlık ve Vade Kuralları
+- **Varlık**: BIST ticker kodu kullan — AKBNK, GARAN, THYAO, BIMAS, vb. (parite formatı DEĞİL)
+- **Vade**: Sadece +12M (12 aylık hedef fiyat). FX'teki gibi 1M/3M/6M yok.
+- **Spot Fiyat**: Rapordaki "Fiyat TL" sütunundan
+- **Hedef Fiyat**: Rapordaki "Hedef TL" sütunundan
+- **Halüsinasyon yasak**: Raporda olmayan hisse veya fiyat UYDURMA
+
+### forecasts.json Hisse Kaydı Formatı
+
+```json
+{
+  "date": "2026-03-12",
+  "pair": "AKBNK",
+  "spot": 77.6,
+  "forecast1m": null,
+  "forecast3m": null,
+  "forecast6m": null,
+  "forecast12m": 108.0,
+  "consensus1m": null,
+  "consensus3m": null,
+  "consensus6m": null,
+  "consensus12m": null,
+  "forward1m": null,
+  "forward3m": null,
+  "forward6m": null,
+  "forward12m": null,
+  "documentId": "icbc-model-portfoy-2026-03",
+  "documentName": "Model Portföy Güncelleme - Mart 2026",
+  "institution": "ICBC Yatırım"
+}
+```
+
+### Analiz Kuralları
+1. Her hisse için ayrı tahmin satırı oluştur (1 rapor × 9 hisse = 9 Tahminler satırı)
+2. **Analiz Tezi**: Rapordaki ilgili hisse bölümünün özetini yaz (ekleme/çıkarma gerekçesi)
+3. **Kurum**: "ICBC Yatırım"
+4. **Format**: "PDF"
+5. **Analist**: Raporda belirtilmişse analist adı, yoksa "Ekip"
+6. BIST100 hedefi ayrı bir tahmin satırı olarak eklenebilir: pair="BIST100"

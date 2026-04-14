@@ -60,7 +60,9 @@ npm run forecast-score -- analizler/tahminler.csv
 │   │   └── forecast-score.ts # Tahmin skorlama hesaplama
 │   ├── scrapers/
 │   │   ├── base-scraper.ts   # Abstract class — tüm scraper'ların temel arayüzü
-│   │   └── danske-bank.ts    # Danske Bank scraper implementasyonu
+│   │   ├── danske-bank.ts    # Danske Bank scraper implementasyonu
+│   │   ├── icbc-yatirim.ts   # ICBC Yatırım scraper implementasyonu
+│   │   └── deniz-yatirim.ts  # Deniz Yatırım scraper implementasyonu
 │   └── transcript/
 │       └── fetch-transcripts.py  # YouTube transkript toplama (Python)
 ├── .github/
@@ -87,6 +89,10 @@ npm run forecast-score -- analizler/tahminler.csv
 ├── raporlar/                 # İndirilen PDF'ler ve transkriptler
 │   ├── danske-bank/
 │   │   └── fx-forecast-update/
+│   ├── icbc-yatirim/
+│   │   └── model-portfoy/
+│   ├── deniz-yatirim/
+│   │   └── gunluk-bulten/
 │   └── devrim-akyil/
 │       └── youtube-transcripts/
 └── state/
@@ -98,6 +104,8 @@ npm run forecast-score -- analizler/tahminler.csv
 | Kaynak | Tür | Kategori | Slug |
 |--------|-----|----------|------|
 | Danske Bank | PDF | FX Forecast Update | `danske-bank` |
+| ICBC Yatırım | PDF | Model Portföy | `icbc-yatirim` |
+| Deniz Yatırım | PDF | Günlük Bülten | `deniz-yatirim` |
 | Devrim Akyıl | YouTube | Transkript | `devrim-akyil` |
 
 ## Yeni Kurum/Kategori Ekleme
@@ -281,8 +289,8 @@ Ardışık raporları cross-reference ederek varsayım gerçekleşme ve tahmin s
 
 - **Playwright** — Hedef siteler React SPA + consent wall kullandığı için basit HTTP client yetersiz
 - **API intercept** — HTML scraping yerine SPA'nın iç API çağrılarını yakalıyoruz; daha güvenilir ve hızlı
-- **HTML fallback** — API yakalanamadığında sayfa DOM'undan article linkleri çıkarılır
-- **Manuel tetikleme** — Scheduler yok, kullanıcı istediğinde `npm start` ile çalıştırır
+- **HTML fallback** — API yakalanamadığında sayfa DOM'undan article linkleri çıkarılır- **TLS fallback** — Node.js native fetch TLS sertifika hatası verdiğinde Playwright context üzerinden indirilir
+- **Yahoo Finance API** — BIST hisse senetleri ve BIST100 endeksi için tarihsel fiyat verisi (ticker.IS formatı)- **Manuel tetikleme** — Scheduler yok, kullanıcı istediğinde `npm start` ile çalıştırır
 - **JSON state tracking** — `state/downloaded.json` dosyası ile PDF URL ve YouTube video URL'e göre duplicate kontrolü
 - **VS Code Agent + Skill** — Her agent kendi skill'ini kullanır: `report-collection` (scraper mimari), `transcript-collection` (YouTube transkript), `pdf-analysis` (analiz prosedürü), `doc-scoring` (belge skorlama), `forecast-scoring` (tahmin skorlama + öneri), `dashboard-generation` (interaktif dashboard)
 - **Multi-agent orkestrasyon** — Orchestrator agent alt agent'ları (report-collector, transcript-collector, report-analyzer, doc-scorer, forecast-scorer, dashboard-generator) doğru sırayla çağırır
@@ -308,6 +316,14 @@ Tüm ayarlar `src/config.ts` içindedir:
 Sayfaya git → Disclaimer modal (YES x2 + Agree) → Cookie consent (Ok to necessary)
 → Kategori linkine tıkla → API response intercept (api5.danskebank.com/subcategory/...)
 → JSON'dan article listesi + published_url (PDF) çıkar → PDF'leri indir
+```
+
+### ICBC Yatırım Scraper Akışı
+
+```
+Sayfaya git (ignoreHTTPSErrors) → Cookie consent (Tüm Çerezleri Kabul Et)
+→ HTML'den PDF linkleri çıkar (a[href$=".pdf"]) → Türkçe tarih parse
+→ Playwright context üzerinden PDF indir (TLS sertifika sorunu nedeniyle)
 ```
 
 ### State Dosyası Formatı

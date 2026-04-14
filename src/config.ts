@@ -32,4 +32,26 @@ export const SOURCES: ScraperSource[] = [
       },
     ],
   },
+  {
+    name: "ICBC Yatırım",
+    slug: "icbc-yatirim",
+    categories: [
+      {
+        name: "Model Portföy",
+        slug: "model-portfoy",
+        url: "https://www.icbcyatirim.com.tr/tr/hizmetlerimiz/bulten/Model-Portfoy/156/0/0",
+      },
+    ],
+  },
+  {
+    name: "Deniz Yatırım",
+    slug: "deniz-yatirim",
+    categories: [
+      {
+        name: "Günlük Bülten",
+        slug: "gunluk-bulten",
+        url: "https://www.denizyatirim.com/GunlukBulten",
+      },
+    ],
+  },
 ];

@@ -81,6 +81,68 @@ const FRANKFURTER_CURRENCIES = new Set([
   "USD", "GBP", "JPY", "CHF", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "CAD", "AUD", "NZD", "CNY", "TRY",
 ]);
 
+/**
+ * Hisse senedi mi (BIST ticker) yoksa FX paritesi mi kontrol et.
+ * "/" içermeyen ve GRAM-ALTIN/GRAM-GUMUS/BIST100 olmayan varlıklar hisse olarak kabul edilir.
+ */
+function isStock(pair: string): boolean {
+  return !pair.includes("/") && pair !== "GRAM-ALTIN" && pair !== "GRAM-GUMUS" && pair !== "BIST100";
+}
+
+/**
+ * Yahoo Finance v8 chart API üzerinden hisse/endeks fiyatı çeker.
+ * Ticker formatı: AKBNK.IS (BIST), XU100.IS (BIST100 endeksi).
+ * Hafta sonu/tatil günlerinde veri olmayabileceği için ±7 gün aralık kullanır.
+ */
+async function fetchStockPrice(ticker: string, date?: string): Promise<number | null> {
+  const yahooTicker = ticker.endsWith(".IS") ? ticker : `${ticker}.IS`;
+  const targetDate = date ?? new Date().toISOString().slice(0, 10);
+  const targetTime = new Date(targetDate + "T00:00:00Z").getTime() / 1000;
+
+  // ±7 gün aralık (hafta sonu/tatil toleransı)
+  const period1 = Math.floor(targetTime - 7 * 86400);
+  const period2 = Math.floor(targetTime + 7 * 86400);
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?period1=${period1}&period2=${period2}&interval=1d`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      chart: {
+        result: Array<{
+          timestamp: number[];
+          indicators: { quote: Array<{ close: (number | null)[] }> };
+        }> | null;
+      };
+    };
+
+    const result = data.chart?.result?.[0];
+    if (!result?.timestamp?.length) return null;
+
+    const timestamps = result.timestamp;
+    const closes = result.indicators.quote[0].close;
+    const targetMs = targetTime * 1000;
+
+    // En yakın tarihi bul
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < timestamps.length; i++) {
+      const dist = Math.abs(timestamps[i] * 1000 - targetMs);
+      if (dist < bestDist && closes[i] !== null) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+
+    return closes[bestIdx] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** ECB Data API ile desteklenen metal kodları */
 const METALS = new Set(["XAU", "XAG"]);
 
@@ -169,8 +231,11 @@ async function fetchRate(pair: string, date?: string): Promise<number | null> {
     return null;
   }
 
-  // ── BIST100: API desteklenmiyor ──
-  if (pair === "BIST100") return null;
+  // ── BIST100: Yahoo Finance ──
+  if (pair === "BIST100") return fetchStockPrice("XU100", date);
+
+  // ── BIST hisse senetleri: Yahoo Finance ──
+  if (isStock(pair)) return fetchStockPrice(pair, date);
 
   // ── Frankfurter API: standart FX pariteleri ──
   const parsed = parseApiPair(pair);
@@ -228,11 +293,12 @@ function addMonths(dateStr: string, months: number): string {
 }
 
 /**
- * JPY pariteleri 2-haneli (1 pip = 0.01), metaller birim fiyat, diğerleri 4-haneli (1 pip = 0.0001)
+ * JPY pariteleri 2-haneli (1 pip = 0.01), metaller birim fiyat, hisseler birim fiyat, diğerleri 4-haneli (1 pip = 0.0001)
  */
 function pipMultiplier(pair: string): number {
   if (pair === "XAU/USD" || pair === "GRAM-ALTIN" || pair === "BIST100") return 1;
   if (pair === "XAG/USD" || pair === "GRAM-GUMUS") return 100;
+  if (isStock(pair)) return 1;
   if (pair.includes("JPY")) return 100;
   return 10000;
 }

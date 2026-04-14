@@ -3,6 +3,8 @@ import { chromium } from "playwright";
 import { CONFIG, SOURCES } from "./config.js";
 import { Tracker } from "./tracker.js";
 import { DanskeBankScraper } from "./scrapers/danske-bank.js";
+import { IcbcYatirimScraper } from "./scrapers/icbc-yatirim.js";
+import { DenizYatirimScraper } from "./scrapers/deniz-yatirim.js";
 import type { BaseScraper } from "./scrapers/base-scraper.js";
 import type { Report, ScraperSource } from "./types.js";
 
@@ -10,6 +12,10 @@ function createScraper(source: ScraperSource): BaseScraper {
   switch (source.slug) {
     case "danske-bank":
       return new DanskeBankScraper(source);
+    case "icbc-yatirim":
+      return new IcbcYatirimScraper(source);
+    case "deniz-yatirim":
+      return new DenizYatirimScraper(source);
     default:
       throw new Error(`Bilinmeyen kaynak: ${source.slug}`);
   }
@@ -126,6 +132,9 @@ async function downloadWithPlaywright(
   const datePrefix = report.date.replace(/[\s/]/g, "-");
   const slug = report.title
     .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g")
+    .replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 120);
@@ -138,13 +147,28 @@ async function downloadWithPlaywright(
 
   // PDF URL'leri genellikle direkt download tetikler
   // Node.js fetch ile indiriyoruz (daha güvenilir)
-  const response = await fetch(report.pdfUrl);
-  if (!response.ok) {
-    throw new Error(`PDF indirilemedi: ${response.status} ${response.statusText}`);
+  // TLS sertifika hatası olursa Playwright context üzerinden indir
+  try {
+    const response = await fetch(report.pdfUrl);
+    if (!response.ok) {
+      throw new Error(`PDF indirilemedi: ${response.status} ${response.statusText}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(filePath, buffer);
+  } catch (fetchErr) {
+    // TLS hatası veya diğer fetch hataları — Playwright ile dene
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    try {
+      const response = await context.request.get(report.pdfUrl);
+      if (!response.ok()) {
+        throw new Error(`PDF indirilemedi (Playwright): ${response.status()} ${response.statusText()}`);
+      }
+      const buffer = Buffer.from(await response.body());
+      fs.writeFileSync(filePath, buffer);
+    } finally {
+      await context.close();
+    }
   }
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  fs.writeFileSync(filePath, buffer);
 
   return filePath;
 }
