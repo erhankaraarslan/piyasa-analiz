@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "start:debug": "tsx src/index.ts --debug",
+    "analyze": "tsx src/analyzer/generate-analysis.ts",
     "extract": "tsx src/analyzer/extract-text.ts",
     "forecast-check": "tsx src/analyzer/forecast-check.ts",
     "doc-score": "tsx src/analyzer/doc-score.ts",

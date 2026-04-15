@@ -38,8 +38,9 @@ Kod değişikliklerinde aşağıdaki durumlarda `README.md` dosyasını güncell
 - `forecasts.json` formatında consensus ve forward değerleri de yer alır — rapordaki ilgili satırlardan çıkarılır; hisse senetlerinde sadece forecast12m doldurulur
 - FX pariteleri Frankfurter API, BIST hisse senetleri Yahoo Finance v8 chart API (ticker.IS formatı) üzerinden fiyatlanır
 - Hisse senedi tahminlerinde benchmark = BIST100 (XU100.IS); FX'te benchmark = aynı parite
-- FX pariteleri için öneri terminolojisi: Bullish/Bearish/Neutral (Buy/Sell kullanılmaz). Hisse senetleri için: Buy/Sell/Hold
-- Transkript tarihleri yt-dlp'nin `upload_date` metadata alanından alınır (göreceli tarih sadece cutoff filtresi için kullanılır)
+- Hisse senetlerinde split tespiti `forecast-check.ts` tarafından Yahoo Finance adjclose/close oranıyla otomatik yapılır. Split varsa spot/forecast değerleri split-sonrası bazına çevrilir; `forecasts-results.json`'da `splitRatio` alanı eklenir. Tahminler ve skorlama tabloları düzeltilmiş değerleri kullanır
+- FX pariteleri için öneri terminolojisi: Strong Bearish / Bearish / Slightly Bearish / Neutral / Slightly Bullish / Bullish / Strong Bullish (7 kademe). Hisse senetleri için: Strong Sell / Sell / Reduce / Hold / Buy / Strong Buy (6 kademe). Buy/Sell sadece hisse, Bullish/Bearish sadece FX
+- Transkript dosyalarındaki `# Tarih:` alanı yt-dlp'nin `upload_date` metadata'sıdır. Toplu yükleme yapılan kanallarda bu tarih yanlış olabilir. Analiz sırasında transkript metninde geçen somut tarih ifadelerinden (ör. "14 Şubat 2026", "bugün 3 Mart") gerçek içerik tarihi çıkarılır ve `# Tarih:` alanı yerine kullanılır. `upload_date` sadece cutoff filtresi ve fallback olarak kullanılır
 - Belge skorlama minimum 5 değerlendirilen tahmin gerektirir; altında ⚠ uyarısı verilir ancak gerçek skor hesaplanır (0'a düşürülmez)
 - Belge skorlamada tahmin eşleşmesi kurum+tarih bazlıdır; Tahminler CSV'de `Belge Adı` sütunu mevcutsa kurum+tarih+belge_adı bazlı eşleştirme yapılır
 - Alpha verisi yoksa (consensus/forward null) alpha ağırlığı yön ve hedefe dağıtılır (0.50/0.35/0.15)

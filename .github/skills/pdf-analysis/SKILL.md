@@ -37,7 +37,7 @@ npx tsx src/analyzer/extract-text.ts raporlar/danske-bank/fx-forecast-update/
 |-------|----------|--------|
 | **Belge Tarihi** | Raporun yayın tarihi | PDF kapak/başlık veya dosya adından |
 | **Kurum** | Yayınlayan kurum | Zaten biliniyor (Danske Bank vb.) |
-| **Analistler** | Raporun yazar(lar)ı | PDF kapak sayfası veya son sayfa |
+| **Analistler** | Raporun **TÜM** yazar(lar)ı, virgülle ayrılmış | PDF kapak sayfası, son sayfa, **ve** her parite bölümünün alt kısmındaki imza satırları — tüm sayfaları tara, sadece kapaktaki isimleri değil. Tahminler tablosundaki Analist sütunundaki isimler Belgeler'deki Analistler listesinin alt kümesinde olmalı |
 | **Format** | Belge formatı | Her zaman "PDF" |
 | **Belge Adı** | Raporun tam adı | PDF başlığı |
 | **Özet Metin** | 3-5 cümlelik özet | Ana bulgulardan sentezle |
@@ -123,9 +123,9 @@ Tahmin bazında granüler izleme. Her satır = bir rapordaki bir varlık × bir 
 | 8 | **Hedef Tarihi** | Tahmin Tarihi + Vade süresi | Hesaplama: date + vade |
 | 9 | **Spot Fiyat** | Raporun yayın tarihindeki cari kur | Raporun forecast tablosundaki "Spot" sütunundan |
 | 10 | **Hedef Fiyat** | Tahmin edilen kur | Raporun forecast tablosundaki ilgili vade sütunundan |
-| 11 | **Analiz Tezi** | Varlığa özel yorum/beklenti | Rapordaki parite bazlı yorumdan (yoksa genel tez) |
+| 11 | **Analiz Tezi** | Varlığa özel yorum/beklenti | Rapordaki parite bazlı yorumdan (yoksa genel tez) — **her rapor×parite kombinasyonu için BENZERSİZ olmalı** |
 | 12 | **Gerçekleşen Fiyat** | Hedef tarihindeki gerçek kur | forecasts-results.json veya cross-report |
-| 13 | **Sapma (pip)** | Hedef − Gerçekleşen, pip cinsinden | forecasts-results.json |
+| 13 | **Sapma (pip)** | Hedef − Gerçekleşen, pip/birim cinsinden | forecasts-results.json — FX: standart pip (EUR/USD 1 pip = 0.0001, JPY çiftleri 1 pip = 0.01); Hisse/Emtia: TL/USD birim farkı |
 | 14 | **Yön İsabeti** | Spot→Hedef yönü ile Spot→Gerçekleşen yönü aynı mı? | ✅ aynı yön / ❌ ters yön / ⏳ henüz veri yok |
 
 **Yön İsabeti Hesaplama:**
@@ -184,12 +184,38 @@ Her rapordan **tüm paritelerin** ve **tüm vadelerin** forecast tablosunu çık
 - `pair`: Parite adı (EUR/USD, EUR/SEK, EUR/NOK, EUR/DKK, EUR/GBP, EUR/JPY, EUR/CHF, EUR/PLN, EUR/CZK, EUR/HUF, USD/JPY, USD/CAD, USD/CNY, USD/TRY)
 - `spot`: Rapordaki spot kur
 - `forecast1m` / `forecast3m` / `forecast6m` / `forecast12m`: Kurum tahmin değerleri (+1M, +3M, +6M, +12M)
-- `consensus1m` / `consensus3m` / `consensus6m` / `consensus12m`: Consensus (piyasa uzlaşısı) değerleri — rapordaki "Consensus" satırından
-- `forward1m` / `forward3m` / `forward6m` / `forward12m`: Forward kur değerleri — rapordaki "Forward" satırından
+- `consensus1m` / `consensus3m` / `consensus6m` / `consensus12m`: Consensus (piyasa uzlaşısı) değerleri — rapordaki "Consensus" veya "Mkt" satırından. **ÖNEMLİ**: Danske Bank raporlarında her parite tablosunda Consensus satırı bulunur — mutlaka çıkar
+- `forward1m` / `forward3m` / `forward6m` / `forward12m`: Forward kur değerleri — rapordaki "Forward" veya "Fwd" satırından. **ÖNEMLİ**: Danske Bank raporlarında her parite tablosunda Forward satırı bulunur — mutlaka çıkar
 - **`institution`**: Kaynak kurum adı (**ZORUNLU** — "Danske Bank", "ICBC Yatırım", "Deniz Yatırım", "Devrim Akyıl" vb.) — `doc-score.ts` bu alanla eşleştirme yapar
 - **`documentName`**: Raporun/videonun tam adı (**ZORUNLU** — Belgeler tablosundaki Belge Adı ile birebir aynı olmalı)
 - Raporda ilgili vade veya satır yoksa `null` gir
 - Raporda forecast tablosunda bulunmayan pariteler dahil edilmez
+
+##### ⚠️ Kurum Bazlı Forecast Çıkarma Kuralları (Tam Kapsam Zorunlu)
+
+**Danske Bank — FX Forecast Update:**
+- Her raporda bulunan **TÜM paritelerin** forecast tablosu çıkarılmalıdır
+- Beklenen pariteler (raporda mevcutsa): EUR/USD, EUR/GBP, EUR/JPY, EUR/CHF, EUR/SEK, EUR/NOK, EUR/DKK, EUR/PLN, EUR/CZK, EUR/HUF, USD/JPY, USD/CAD, USD/CNY, USD/TRY
+- **EUR/DKK ve EUR/PLN** dahil — bu pariteler sıklıkla atlanıyor, özellikle dikkat et
+- Consensus ve Forward satırları da **ZORUNLU** olarak çıkarılmalı — her parite tablosunda "Fwd" veya "Forward" ve "Consensus" veya "Mkt" satırları aranmalı
+- Forward/Consensus bulunamazsa `null` gir, ama **aramadan geçme**
+
+**ICBC Yatırım — Model Portföy:**
+- Her Model Portföy raporu bir hisse listesi + hedef fiyat tablosu içerir
+- **TÜM hisseler** çıkarılmalıdır — sadece vurgulananlar değil, tablodaki her satır
+- Vade: hisse senetleri için genelde +12M (aksi belirtilmedikçe)
+- `pair`: BIST ticker formatı (ör. AKBNK, FROTO, THYAO)
+- `forecast12m`: Hedef fiyat; `spot`: Rapordaki mevcut fiyat
+- Consensus ve forward alanları hisseler için `null`
+
+**Deniz Yatırım — Günlük Bülten:**
+- Her günlük bülten "Model Portföy" veya "Öneriler" bölümü içerebilir
+- Hisse bazlı öneriler: ticker, hedef fiyat, mevcut fiyat varsa çıkar
+- Bülten sadece teknik seviyeler içeriyorsa (destek/direnç) bunları da Spot + Hedef olarak yapılandır
+- Bültende herhangi bir fiyat hedefi, getiri beklentisi veya model portföy değişikliği varsa **mutlaka** tahmin olarak çıkar
+
+**Devrim Akyıl — YouTube Transkriptleri:**
+- Sözel tahminler (fiyat hedefleri, destek/direnç seviyeleri) çıkarılmalı (detaylar aşağıdaki "Sözel Tahminlerin Çıkarılması" bölümünde)
 
 #### Adım 2: Tahmin sapmasını hesapla (script)
 
@@ -200,6 +226,7 @@ npx tsx src/analyzer/forecast-check.ts analizler/forecasts.json
 Script:
 - **Cross-report**: Rapor N'in +1M tahmini → Rapor N+1'in spotu ile karşılaştırılır
 - **Hibrit API**: Son raporun tahmini → frankfurter.app API'den güncel kur ile karşılaştırılır
+- **Split düzeltmesi**: Hisse senetlerinde Yahoo Finance adjclose/close oranı ile split tespiti yapılır. Split varsa rapordaki spot ve forecast değerleri otomatik olarak split-sonrası bazına çevrilir. `splitRatio` alanı çıktıya eklenir.
 - Çıktı: `analizler/forecasts-results.json` + konsol tablosu
 
 #### Adım 3: Varsayım gerçekleşme değerlendir (AI)
@@ -228,12 +255,15 @@ EUR/USD +1M: +100 pip (%0.85); EUR/SEK +1M: -200 pip (%1.80); EUR/NOK +1M: +50 p
 
 **Tahminler raporu:** `forecasts-results.json` dosyasından her rapor × parite × vade kombinasyonu için ayrı satır oluştur. Gerçekleşen Fiyat, Sapma (pip) ve Yön İsabeti sütunlarını script çıktısından doldur. Rapordaki parite bazlı yorumu Analiz Tezi sütununa yaz.
 
+> **⚠️ Split düzeltmesi:** `forecasts-results.json` kaydında `splitRatio` alanı varsa (≠ 1), output'taki `spot` ve `forecast` değerleri zaten split-sonrası bazına çevrilmiştir. Tahminler tablosundaki **Spot Fiyat** ve **Hedef Fiyat** sütunlarına bu düzeltilmiş değerleri yaz (rapordaki eski pre-split değerleri değil).
+
 ### Faz 2 Kuralları
 
 1. **Varsayım gerçekleşme yalnızca sonraki rapordan çıkarılır** — dış haber, piyasa verisi kullanma.
 2. **Tahmin sapması script çıktısından alınır** — elle hesaplama yapma.
 3. **Son rapor için**: Varsayım Gerçekleşme = ⏳ Değerlendirilemez, Tahmin Sapması = API'den (frankfurter.app).
 4. **Kanıt göster**: Her gerçekleşme değerlendirmesinde sonraki rapordan referans cümlesi ver.
+5. **Analiz Tezi tekrar yasağı**: Tahminler tablosundaki Analiz Tezi sütunu her rapor×parite kombinasyonu için **benzersiz ve spesifik** olmalıdır. Aynı/benzer genel ifadeler (ör. "ABD dolarında yapısal zayıflık") farklı tarihlerin raporlarında tekrar **YASAKLANMIŞTIR**. Her rapordaki güncel makro ortam, politika değişiklikleri veya piyasa gelişmeleri teze yansıtılmalı.
 
 ---
 
@@ -249,9 +279,19 @@ Dosya başlığından metadata çıkar:
 ```
 # Video Başlığı         → Belge Adı
 # Kaynak: URL            → Kaynak referansı
-# Tarih: YYYY-MM-DD      → Belge Tarihi
+# Tarih: YYYY-MM-DD      → Belge Tarihi (dikkat: aşağıdaki tarih doğrulama kuralına bak)
 # Kanal: Kanal Adı       → Kurum
 ```
+
+### ⚠️ Transkript Tarih Doğrulama (Zorunlu)
+
+`# Tarih:` alanı yt-dlp'nin `upload_date` metadata'sıdır ve **toplu yükleme yapılan kanallarda yanlış olabilir**. Aynı kanalda birden fazla videonun aynı tarihe sahip olması toplu yükleme işaretidir.
+
+**Tarih doğrulama prosedürü:**
+1. Transkript metninin **ilk 500 kelimesinde** somut tarih ifadesi ara (ör. "14 Şubat 2026", "bugün 3 Mart", "bu haftanın Cuma günü 28 Şubat")
+2. Metin içinde belirgin bir tarih bulunursa → bu tarihi Belge Tarihi olarak kullan (`# Tarih:` alanını geçersiz say)
+3. Tarih bulunamazsa → `# Tarih:` alanını fallback olarak kullan
+4. Tahminler tablosundaki `Tahmin Tarihi` de aynı doğrulanmış tarihi kullanmalı
 
 ### Belgeler Raporu İçin Transkript Analizi
 
@@ -281,6 +321,25 @@ Her video transkripti için:
 2. **Video başlığıyla tutarlılık sağla**: Başlık "Altın Gümüş BIST'te Kazanmaya Devam" ise, Özet Metin'de altın/gümüş/BIST hakkındaki somut yorumlar olmalı
 3. **Spesifik fiyat/seviye referanslarını koru**: "Altın 3000 doların üzerini hedefliyor", "BIST 10.000'i test eder" gibi somut bilgiler
 4. **Merkez bankası, makro ekonomi yorumlarını özetle**: Fed faiz kararı, TCMB kararları gibi konulardaki spesifik yorumları yaz
+
+### Video Varsayım Gerçekleşme (Cross-Reference)
+
+Aynı kanaldaki ardışık videolar birbirine cross-reference edilerek Varsayım Gerçekleşme sütunu doldurulmalıdır — tıpkı PDF raporlarındaki gibi.
+
+**Prosedür:**
+1. Aynı kanalın videolarını **Belge Tarihi**'ne göre sırala
+2. Video N'deki tahminleri ve varsayımları listele
+3. Video N+1, N+2 veya N+3'teki yorumlarla karşılaştır (±7 gün içindeki videolar)
+4. Varsayım gerçekleşme durumunu belirle (✅/❌/⚠️/⏳)
+5. Referans olarak karşılaştırılan videonun adını ve spesifik ifadesini göster
+
+**Örnek:**
+```
+1. "Altın 3100'ü hedefler" → ✅ Gerçekleşti (Ref: "Altın Gümüş BIST'te Kazanmaya Devam" videosu — "altın 3150'ye ulaştı")
+2. "Dolar 37'nin altına inmez" → ❌ Gerçekleşmedi (Ref: "Dolar Altın BIST İçin Sürpriz Ziyaretçi" — "dolar 36.80'e geriledi")
+```
+
+> **Not**: Yalnızca son video için Varsayım Gerçekleşme = ⏳, diğer videolar cross-reference ile değerlendirilmelidir.
 
 ### Sözel Tahminlerin Çıkarılması (Tahminler Raporu İçin)
 

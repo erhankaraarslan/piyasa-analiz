@@ -64,6 +64,7 @@ interface DeviationResult {
   alpha_vs_consensus_pct: number | null;   // alpha as % of spot
   alpha_vs_forward_pct: number | null;     // alpha as % of spot
   source: "cross-report" | "api" | null;
+  splitRatio?: number; // 1.0 = no split; 0.1 = 10:1 split applied
   documentId?: string;
   documentName?: string;
   format?: string;
@@ -145,6 +146,29 @@ async function fetchStockPrice(ticker: string, date?: string): Promise<number | 
 
 /** ECB Data API ile desteklenen metal kodları */
 const METALS = new Set(["XAU", "XAG"]);
+
+/**
+ * Hisse senedi split tespiti: Raporun spot fiyatını Yahoo Finance'in split-adjusted
+ * tarihsel kapanış fiyatıyla karşılaştırır. Yahoo tüm geçmiş fiyatları split-sonrası bazına
+ * retroaktif olarak düzeltir, dolayısıyla rapor spot / Yahoo close oranı > 1.8 ise raporun
+ * split-öncesi fiyat kullandığı anlaşılır.
+ *
+ * Döndürülen oran (0 < ratio < 1): raporun spot ve forecast değerlerini çarpmak için kullanılır.
+ * Ör: 10:1 split → oran ≈ 0.1 (eski fiyatlar 10'a bölünür)
+ */
+async function getStockSplitRatio(ticker: string, date: string, reportSpot: number | null): Promise<number> {
+  if (reportSpot === null || reportSpot === 0) return 1;
+
+  const yahooClose = await fetchStockPrice(ticker, date);
+  if (yahooClose === null || yahooClose === 0) return 1;
+
+  const ratio = reportSpot / yahooClose;
+  // If report spot is >1.8× Yahoo's (split-adjusted) close, the report uses pre-split prices
+  if (ratio > 1.8) {
+    return yahooClose / reportSpot;
+  }
+  return 1;
+}
 
 /**
  * ECB Statistical Data Warehouse'dan metal fiyatı çeker (EUR bazlı).
@@ -367,6 +391,7 @@ async function main() {
     console.log(`\n━━━ ${pair} (${entries.length} rapor) ━━━`);
 
     const results: DeviationResult[] = [];
+    const today = new Date().toISOString().slice(0, 10);
 
     for (let i = 0; i < entries.length; i++) {
       const cur = entries[i];
@@ -392,7 +417,6 @@ async function main() {
           actual12m = await resolveSpot(entries[i + 12], spotCache);
         }
         // Cross-report'ta bulunamayan uzun vadeler için API'ye düş
-        const today = new Date().toISOString().slice(0, 10);
         if (actual3m === null && cur.forecast3m !== null) {
           const target = addMonths(cur.date, 3);
           if (target <= today) { try { actual3m = await fetchRate(pair, target); } catch { /* */ } }
@@ -407,12 +431,14 @@ async function main() {
         }
       } else {
         try {
-          actual1m = await fetchRate(pair);
-          source = "api";
-          if (actual1m !== null) {
-            console.log(`📡 API'den güncel ${pair}: ${actual1m.toFixed(4)}`);
+          const target1m = addMonths(cur.date, 1);
+          if (cur.forecast1m !== null && target1m <= today) {
+            actual1m = await fetchRate(pair);
+            if (actual1m !== null) {
+              source = "api";
+              console.log(`📡 API'den güncel ${pair}: ${actual1m.toFixed(4)}`);
+            }
           }
-          const today = new Date().toISOString().slice(0, 10);
           for (const months of [3, 6, 12] as const) {
             const target = addMonths(cur.date, months);
             if (target <= today) {
@@ -421,6 +447,9 @@ async function main() {
                 if (months === 3) actual3m = rate;
                 else if (months === 6) actual6m = rate;
                 else actual12m = rate;
+                if (rate !== null) {
+                  source = "api";
+                }
               } catch { /* vade henüz dolmamış */ }
             }
           }
@@ -429,26 +458,46 @@ async function main() {
         }
       }
 
+      // ── Hisse senedi split tespiti ve düzeltmesi ──
+      let adjSpot = spot;
+      let adjForecast1m = cur.forecast1m;
+      let adjForecast3m = cur.forecast3m;
+      let adjForecast6m = cur.forecast6m;
+      let adjForecast12m = cur.forecast12m;
+      let splitRatio = 1;
+
+      if (isStock(pair)) {
+        splitRatio = await getStockSplitRatio(pair, cur.date, cur.spot);
+        if (splitRatio !== 1) {
+          console.log(`  ⚠️  ${pair} split tespit edildi (oran: ${splitRatio.toFixed(4)}, rapor tarihi: ${cur.date}) — spot/forecast değerleri düzeltiliyor`);
+          if (adjSpot !== null) adjSpot = adjSpot * splitRatio;
+          if (adjForecast1m !== null) adjForecast1m = adjForecast1m * splitRatio;
+          if (adjForecast3m !== null) adjForecast3m = adjForecast3m * splitRatio;
+          if (adjForecast6m !== null) adjForecast6m = adjForecast6m * splitRatio;
+          if (adjForecast12m !== null) adjForecast12m = adjForecast12m * splitRatio;
+        }
+      }
+
       const result: DeviationResult = {
         date: cur.date,
         pair: cur.pair,
-        spot,
-        forecast1m: cur.forecast1m,
+        spot: adjSpot,
+        forecast1m: adjForecast1m,
         actual1m,
-        deviation1m_pips: actual1m !== null && cur.forecast1m !== null ? calcPips(actual1m, cur.forecast1m, cur.pair) : null,
-        deviation1m_pct: actual1m !== null && cur.forecast1m !== null ? calcPct(actual1m, cur.forecast1m) : null,
-        forecast3m: cur.forecast3m,
+        deviation1m_pips: actual1m !== null && adjForecast1m !== null ? calcPips(actual1m, adjForecast1m, cur.pair) : null,
+        deviation1m_pct: actual1m !== null && adjForecast1m !== null ? calcPct(actual1m, adjForecast1m) : null,
+        forecast3m: adjForecast3m,
         actual3m,
-        deviation3m_pips: actual3m !== null && cur.forecast3m !== null ? calcPips(actual3m, cur.forecast3m, cur.pair) : null,
-        deviation3m_pct: actual3m !== null && cur.forecast3m !== null ? calcPct(actual3m, cur.forecast3m) : null,
-        forecast6m: cur.forecast6m,
+        deviation3m_pips: actual3m !== null && adjForecast3m !== null ? calcPips(actual3m, adjForecast3m, cur.pair) : null,
+        deviation3m_pct: actual3m !== null && adjForecast3m !== null ? calcPct(actual3m, adjForecast3m) : null,
+        forecast6m: adjForecast6m,
         actual6m,
-        deviation6m_pips: actual6m !== null && cur.forecast6m !== null ? calcPips(actual6m, cur.forecast6m, cur.pair) : null,
-        deviation6m_pct: actual6m !== null && cur.forecast6m !== null ? calcPct(actual6m, cur.forecast6m) : null,
-        forecast12m: cur.forecast12m,
+        deviation6m_pips: actual6m !== null && adjForecast6m !== null ? calcPips(actual6m, adjForecast6m, cur.pair) : null,
+        deviation6m_pct: actual6m !== null && adjForecast6m !== null ? calcPct(actual6m, adjForecast6m) : null,
+        forecast12m: adjForecast12m,
         actual12m,
-        deviation12m_pips: actual12m !== null && cur.forecast12m !== null ? calcPips(actual12m, cur.forecast12m, cur.pair) : null,
-        deviation12m_pct: actual12m !== null && cur.forecast12m !== null ? calcPct(actual12m, cur.forecast12m) : null,
+        deviation12m_pips: actual12m !== null && adjForecast12m !== null ? calcPips(actual12m, adjForecast12m, cur.pair) : null,
+        deviation12m_pct: actual12m !== null && adjForecast12m !== null ? calcPct(actual12m, adjForecast12m) : null,
         consensus1m: cur.consensus1m,
         consensus3m: cur.consensus3m,
         consensus6m: cur.consensus6m,
@@ -458,20 +507,21 @@ async function main() {
         forward6m: cur.forward6m,
         forward12m: cur.forward12m,
         // Alpha: |benchmark - actual| - |forecast - actual| → pozitif = kurum daha isabetli
-        alpha_vs_consensus_pips: actual1m !== null && cur.consensus1m !== null && cur.forecast1m !== null
-          ? Math.round(Math.abs(cur.consensus1m - actual1m) * pipMultiplier(cur.pair) - Math.abs(cur.forecast1m - actual1m) * pipMultiplier(cur.pair))
+        alpha_vs_consensus_pips: actual1m !== null && cur.consensus1m !== null && adjForecast1m !== null
+          ? Math.round(Math.abs(cur.consensus1m - actual1m) * pipMultiplier(cur.pair) - Math.abs(adjForecast1m - actual1m) * pipMultiplier(cur.pair))
           : null,
-        alpha_vs_forward_pips: actual1m !== null && cur.forward1m !== null && cur.forecast1m !== null
-          ? Math.round(Math.abs(cur.forward1m - actual1m) * pipMultiplier(cur.pair) - Math.abs(cur.forecast1m - actual1m) * pipMultiplier(cur.pair))
+        alpha_vs_forward_pips: actual1m !== null && cur.forward1m !== null && adjForecast1m !== null
+          ? Math.round(Math.abs(cur.forward1m - actual1m) * pipMultiplier(cur.pair) - Math.abs(adjForecast1m - actual1m) * pipMultiplier(cur.pair))
           : null,
         // Alpha yüzdesel: spot'a göre normalize (pariteler arası karşılaştırılabilir)
-        alpha_vs_consensus_pct: actual1m !== null && cur.consensus1m !== null && cur.forecast1m !== null && spot !== null
-          ? +((Math.abs(cur.consensus1m - actual1m) - Math.abs(cur.forecast1m - actual1m)) / spot * 100).toFixed(4)
+        alpha_vs_consensus_pct: actual1m !== null && cur.consensus1m !== null && adjForecast1m !== null && adjSpot !== null
+          ? +((Math.abs(cur.consensus1m - actual1m) - Math.abs(adjForecast1m - actual1m)) / adjSpot * 100).toFixed(4)
           : null,
-        alpha_vs_forward_pct: actual1m !== null && cur.forward1m !== null && cur.forecast1m !== null && spot !== null
-          ? +((Math.abs(cur.forward1m - actual1m) - Math.abs(cur.forecast1m - actual1m)) / spot * 100).toFixed(4)
+        alpha_vs_forward_pct: actual1m !== null && cur.forward1m !== null && adjForecast1m !== null && adjSpot !== null
+          ? +((Math.abs(cur.forward1m - actual1m) - Math.abs(adjForecast1m - actual1m)) / adjSpot * 100).toFixed(4)
           : null,
         source,
+        splitRatio: splitRatio !== 1 ? splitRatio : undefined,
         documentId: cur.documentId,
         documentName: cur.documentName,
         format: cur.format,

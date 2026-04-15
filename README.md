@@ -18,6 +18,9 @@ npm start
 # YouTube transkriptleri çek
 npm run transcript
 
+# Belgeler/tahminler/forecast çıktıları üret
+npm run analyze
+
 # PDF'den text çıkar (analiz için)
 npm run extract -- raporlar/danske-bank/fx-forecast-update/dosya.pdf
 
@@ -54,6 +57,7 @@ npm run forecast-score -- analizler/tahminler.csv
 │   ├── tracker.ts            # İndirme geçmişi / duplicate engelleme
 │   ├── downloader.ts         # PDF indirme yardımcı fonksiyonları
 │   ├── analyzer/
+│   │   ├── generate-analysis.ts # Analiz çıktıları üretimi (belgeler + tahminler + forecasts)
 │   │   ├── extract-text.ts   # PDF → text çıkarma (pdf-parse)
 │   │   ├── forecast-check.ts # Tahmin sapması + alpha hesaplama (cross-report + API)
 │   │   ├── doc-score.ts      # Belge skorlama hesaplama
@@ -251,7 +255,7 @@ Tek bir agent da doğrudan çağrılabilir:
 | Gerçekleşen Fiyat | Hesaplama | Hedef tarihindeki piyasa fiyatı |
 | Gerçekleşen Getiri % | Hesaplama | (Gerçekleşen − Spot) / Spot × 100 |
 | Hedef Yön | Hesaplama | Yukarı / Aşağı / Sabit |
-| Öneri | Hesaplama | Alpha + RefAlpha tabanlı kural sistemi (hisse: Buy/Sell, FX: Bullish/Bearish) |
+| Öneri | Hesaplama | Alpha + RefAlpha tabanlı kural sistemi (hisse: Strong Sell/Sell/Reduce/Hold/Buy/Strong Buy, FX: Strong Bearish/Bearish/Slightly Bearish/Neutral/Slightly Bullish/Bullish/Strong Bullish) |
 | Yön İsabeti | Hesaplama | 1 veya 0 |
 | Hedef Yakınlığı | Hesaplama | max(0, 100 − MAPE × 10) |
 | Tahmin Doğruluğu | Hesaplama | Yön yanlış→0; MAPE<1%→100, 1-3%→75, 3-5%→50, ≥5%→25 |
@@ -290,7 +294,7 @@ Ardışık raporları cross-reference ederek varsayım gerçekleşme ve tahmin s
 - **Playwright** — Hedef siteler React SPA + consent wall kullandığı için basit HTTP client yetersiz
 - **API intercept** — HTML scraping yerine SPA'nın iç API çağrılarını yakalıyoruz; daha güvenilir ve hızlı
 - **HTML fallback** — API yakalanamadığında sayfa DOM'undan article linkleri çıkarılır- **TLS fallback** — Node.js native fetch TLS sertifika hatası verdiğinde Playwright context üzerinden indirilir
-- **Yahoo Finance API** — BIST hisse senetleri ve BIST100 endeksi için tarihsel fiyat verisi (ticker.IS formatı)- **Manuel tetikleme** — Scheduler yok, kullanıcı istediğinde `npm start` ile çalıştırır
+- **Yahoo Finance API** — BIST hisse senetleri ve BIST100 endeksi için tarihsel fiyat verisi (ticker.IS formatı). Stock split tespiti adjclose/close oranıyla otomatik yapılır- **Manuel tetikleme** — Scheduler yok, kullanıcı istediğinde `npm start` ile çalıştırır
 - **JSON state tracking** — `state/downloaded.json` dosyası ile PDF URL ve YouTube video URL'e göre duplicate kontrolü
 - **VS Code Agent + Skill** — Her agent kendi skill'ini kullanır: `report-collection` (scraper mimari), `transcript-collection` (YouTube transkript), `pdf-analysis` (analiz prosedürü), `doc-scoring` (belge skorlama), `forecast-scoring` (tahmin skorlama + öneri), `dashboard-generation` (interaktif dashboard)
 - **Multi-agent orkestrasyon** — Orchestrator agent alt agent'ları (report-collector, transcript-collector, report-analyzer, doc-scorer, forecast-scorer, dashboard-generator) doğru sırayla çağırır
