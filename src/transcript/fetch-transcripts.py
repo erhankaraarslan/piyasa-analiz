@@ -65,7 +65,8 @@ def slugify(text: str) -> str:
 
 
 def parse_relative_date(text: str) -> Optional[datetime]:
-    """YouTube'un göreceli tarih metnini ayrıştır ('2 weeks ago', '3 gün önce' vb.)."""
+    """YouTube'un göreceli tarih metnini ayrıştır ('2 weeks ago', '3 gün önce' vb.).
+    Bu sadece cutoff filtresi için kullanılır — kesin tarih yt-dlp'den alınır."""
     now = datetime.now()
 
     # English long: "X days/weeks/months ago" veya "Streamed X ago"
@@ -120,6 +121,16 @@ def parse_relative_date(text: str) -> Optional[datetime]:
             return now - timedelta(days=num * 365)
 
     return None
+
+
+def parse_upload_date(date_str: str) -> Optional[datetime]:
+    """yt-dlp'nin upload_date alanını (YYYYMMDD) datetime'a çevir."""
+    if not date_str or len(date_str) != 8:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y%m%d")
+    except ValueError:
+        return None
 
 
 # ── State yönetimi ──────────────────────────────────────────────
@@ -179,8 +190,9 @@ def _parse_srv1(xml_text: str) -> str:
     return "\n".join(texts)
 
 
-def fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str]]:
-    """yt-dlp ile Türkçe altyazı çek + Türkçe başlık al. (transcript, localized_title) döner."""
+def fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """yt-dlp ile Türkçe altyazı çek + Türkçe başlık + upload_date al.
+    (transcript, localized_title, upload_date_YYYYMMDD) döner."""
     with tempfile.TemporaryDirectory() as tmpdir:
         out_tpl = os.path.join(tmpdir, "%(id)s")
         opts = {
@@ -198,6 +210,7 @@ def fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str]]:
         }
 
         localized_title = None
+        upload_date = None
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(
@@ -206,29 +219,30 @@ def fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str]]:
                 )
                 if info:
                     localized_title = info.get("title")
+                    upload_date = info.get("upload_date")  # YYYYMMDD format
         except Exception as e:
             err_str = str(e)
             if "429" in err_str:
-                return ("__RATE_LIMITED__", None)
+                return ("__RATE_LIMITED__", None, None)
             print(f"  ⚠ yt-dlp hatası: {type(e).__name__}")
-            return (None, None)
+            return (None, None, None)
 
         # Üretilen altyazı dosyasını bul
         sub_files = list(Path(tmpdir).glob(f"{video_id}*tr*"))
         if not sub_files:
             sub_files = list(Path(tmpdir).glob("*tr*"))
         if not sub_files:
-            return (None, localized_title)
+            return (None, localized_title, upload_date)
 
         sub_file = sub_files[0]
         content = sub_file.read_text(encoding="utf-8")
 
         if sub_file.suffix == ".vtt":
-            return (_parse_vtt(content), localized_title)
+            return (_parse_vtt(content), localized_title, upload_date)
         elif sub_file.suffix in (".srv1", ".xml"):
-            return (_parse_srv1(content), localized_title)
+            return (_parse_srv1(content), localized_title, upload_date)
         else:
-            return (content, localized_title)
+            return (content, localized_title, upload_date)
 
 
 # ── Ana akış ────────────────────────────────────────────────────
@@ -270,14 +284,14 @@ def main() -> None:
             )
 
             published_text = video.get("publishedTimeText", {}).get("simpleText", "")
-            video_date = parse_relative_date(published_text)
+            approx_date = parse_relative_date(published_text)
 
-            if video_date is None:
+            if approx_date is None:
                 print(f"  ⚠ Tarih ayrıştırılamadı: '{published_text}' — atlanıyor: {title}")
                 continue
 
             # Sıralama newest-first olduğundan, cutoff'u geçince dur
-            if video_date < cutoff:
+            if approx_date < cutoff:
                 print("  ⏭ 30 günden eski — tarama durduruluyor")
                 break
 
@@ -290,7 +304,7 @@ def main() -> None:
 
             print(f"  📝 Transkript çekiliyor: {title}")
             result = fetch_transcript(video_id)
-            transcript, localized_title = result
+            transcript, localized_title, upload_date_str = result
 
             # Türkçe başlık varsa tercih et
             if localized_title:
@@ -313,6 +327,12 @@ def main() -> None:
             if transcript is None:
                 print("  ⚠ Transkript yok, atlanıyor")
                 continue
+
+            # Kesin tarih: yt-dlp upload_date > göreceli tarih
+            exact_date = parse_upload_date(upload_date_str)
+            video_date = exact_date if exact_date is not None else approx_date
+            if exact_date is not None and exact_date != approx_date:
+                print(f"  📅 Gerçek yükleme tarihi: {exact_date.strftime('%Y-%m-%d')} (göreceli tahmin: {approx_date.strftime('%Y-%m-%d')})")
 
             date_str = video_date.strftime("%Y-%m-%d")
             slug = slugify(title)

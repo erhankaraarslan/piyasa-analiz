@@ -83,7 +83,9 @@ Başarı Skoru = (Yön İsabeti × 100 × 0.40) + (Hedef Yakınlığı × 0.30) 
 
 ### 5. Öneri Kural Sistemi
 
-**Adım 1 — Alpha bazlı temel öneri:**
+**Adım 1 — Alpha bazlı temel öneri (varlık tipine göre):**
+
+**Hisse Senetleri:**
 
 | Koşul | Öneri |
 |-------|-------|
@@ -95,14 +97,27 @@ Başarı Skoru = (Yön İsabeti × 100 × 0.40) + (Hedef Yakınlığı × 0.30) 
 | Alpha < -5% | Reduce |
 | -5% ≤ Alpha ≤ 5% | Hold |
 
+**FX Pariteleri:**
+
+| Koşul | Öneri |
+|-------|-------|
+| Beklenen > 20% **VE** Alpha > 10% | Strong Bullish |
+| Beklenen > 10% **VE** Alpha > 5% | Bullish |
+| Alpha > 5% | Slightly Bullish |
+| Beklenen < -20% **VE** Alpha < -10% | Strong Bearish |
+| Alpha < -10% | Bearish |
+| Alpha < -5% | Slightly Bearish |
+| -5% ≤ Alpha ≤ 5% | Neutral |
+
 **Adım 2 — RefAlpha conviction düzeltmesi:**
 
 | RefAlpha | Etki |
 |----------|------|
-| > +0.5 | Bir kademe yukarı (Hold → Buy, Buy → Strong Buy, vb.) |
-| < -0.5 | Bir kademe aşağı (Hold → Reduce, Buy → Hold, vb.) |
+| > +0.5 | Bir kademe yukarı |
+| < -0.5 | Bir kademe aşağı |
 
-**Kademe sırası:** Strong Sell → Sell → Reduce → Hold → Buy → Strong Buy
+**Kademe sırası (hisse):** Strong Sell → Sell → Reduce → Hold → Buy → Strong Buy
+**Kademe sırası (FX):** Strong Bearish → Bearish → Slightly Bearish → Neutral → Slightly Bullish → Bullish → Strong Bullish
 
 ### 6. Trailing Benchmark (Ref. Beklenen Getiri)
 
@@ -131,7 +146,8 @@ Script otomatik olarak aşağıdaki dosyaları üretir:
 
 1. **Sütun kısıtlaması**: Tabloya yukarıdaki 25 sütun dışında başka sütun EKLEME.
 2. **Deterministik**: Skorlama tamamen script bazlı — AI yargısı kullanma, script çıktısını olduğu gibi kullan.
-3. **Vadesi dolmamış tahminler**: Hesaplama sütunları "⏳" olarak yazılır.
+3. **Vadesi dolmamış tahminler**: Gerçekleşen Fiyat yoksa hesaplama sütunları "⏳" olarak yazılır.
 4. **Trailing veri eksik**: API'den fiyat çekilemezse Ref. Beklenen, Alpha, RefAlpha ve Öneri "—" olur.
-5. **Sabit eşiği**: |Beklenen Getiri| < 0.1% → "Sabit" yön.
+5. **Sabit tahminler**: |Beklenen Getiri| < 0.1% → "Sabit" yön. Bu tahminler **değerlendirilir** (atlanmaz): Gerçekleşen fiyat spota ±%0.5 dahilindeyse yön isabetli sayılır. Sabit yönlü tahminlere otomatik olarak **"Neutral"** (FX) veya **"Hold"** (hisse) önerisi atanır — `calcOneri` çağrılmaz.
 6. **MAPE denominator**: |Hedef| kullanılır (|Gerçekleşen| değil).
+7. **FX terminoloji**: FX paritelerinde Buy/Sell yerine Bullish/Bearish terminolojisi kullanılır.

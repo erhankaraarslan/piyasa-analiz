@@ -55,7 +55,11 @@ transkript metni buraya...
 
 ### 4. Tarih Ayrıştırma
 
-YouTube göreceli tarih verir ("2 weeks ago", "3 gün önce"). Script bunu tahmini bir tarihe çevirir. Aylık hassasiyetle doğrudur (±birkaç gün).
+YouTube göreceli tarih verir ("2 weeks ago", "3 gün önce"). Script bunu ön filtreleme için kullanır; ancak **gerçek tarih yt-dlp'nin `upload_date` metadata alanından alınır** (YYYYMMDD formatı). yt-dlp her video için kesin yükleme tarihini YouTube API'den çeker.
+
+- Göreceli tarih yalnızca cutoff filtresi için kullanılır (30 günden eski videoları atla)
+- Dosya adındaki tarih yt-dlp'nin döndürdüğü kesin tarihtir
+- Transkript dosyasındaki `# Tarih:` satırı da kesin tarihi yansıtır
 
 ### 5. Yeni Kanal Ekleme
 

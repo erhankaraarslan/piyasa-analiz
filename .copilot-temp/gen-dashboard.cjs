@@ -332,7 +332,25 @@ P.push(
 );
 P.push("</div>");
 P.push('<div class="result-count" id="docCount"></div>');
-P.push('<div class="doc-grid" id="docGrid"></div>');
+P.push('<div class="table-wrap"><table id="docTable"><thead><tr>');
+const docThCols = [
+  ["Belge Tarihi", "Tarih"],
+  ["Kurum", "Kurum"],
+  ["Belge Ad\u0131", "Belge Ad\u0131"],
+  ["Format", "Format"],
+  ["\u0130sabet Oran\u0131 %", "\u0130sabet"],
+  ["Varl\u0131k Say\u0131s\u0131", "Varl\u0131k"],
+  ["Tahmin Say\u0131s\u0131", "Tahmin"],
+  ["Ort. Alpha (Consensus)", "\u03b1 Cons."],
+  ["Ort. Alpha (Forward)", "\u03b1 Fwd."],
+  ["Belge Ba\u015far\u0131 Skoru", "Skor"],
+];
+docThCols.forEach(([col, label]) => {
+  P.push(
+    "<th data-col=\"" + esc(col) + "\">" + label + "</th>"
+  );
+});
+P.push('</tr></thead><tbody id="docBody"></tbody></table></div>');
 P.push('<div class="modal-overlay" id="docModal"></div>');
 P.push("</div>");
 
@@ -348,7 +366,7 @@ P.push(
   '  <div class="filter-group"><label>Vade</label><select id="fMaturity"><option value="">T\u00fcm\u00fc</option><option value="+1M">+1M</option><option value="+3M">+3M</option><option value="+6M">+6M</option><option value="+12M">+12M</option></select></div>'
 );
 P.push(
-  '  <div class="filter-group"><label>\u00d6neri</label><select id="fRec"><option value="">T\u00fcm\u00fc</option><option value="Strong Buy">Strong Buy</option><option value="Buy">Buy</option><option value="Hold">Hold</option><option value="Reduce">Reduce</option><option value="Sell">Sell</option><option value="Strong Sell">Strong Sell</option></select></div>'
+  '  <div class="filter-group"><label>\u00d6neri</label><select id="fRec"><option value="">T\u00fcm\u00fc</option><option value="Strong Buy">Strong Buy</option><option value="Buy">Buy</option><option value="Hold">Hold</option><option value="Reduce">Reduce</option><option value="Sell">Sell</option><option value="Strong Sell">Strong Sell</option><option value="Strong Bullish">Strong Bullish</option><option value="Bullish">Bullish</option><option value="Slightly Bullish">Slightly Bullish</option><option value="Neutral">Neutral</option><option value="Slightly Bearish">Slightly Bearish</option><option value="Bearish">Bearish</option><option value="Strong Bearish">Strong Bearish</option></select></div>'
 );
 P.push(
   '  <div class="filter-group"><label>Kurum</label><select id="fInst"><option value="">T\u00fcm\u00fc</option>' +

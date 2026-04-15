@@ -62,8 +62,8 @@ Generator, CSS ve JS dosyalarını okuyup HTML içine inline gömer → tek dosy
 | Tab | İçerik |
 |-----|--------|
 | **Genel Bakış** | KPI kartları (belge/tahmin sayısı, ort. skor, isabet oranı) + 4 grafik (skor dağılımı, harf notu, kurum karşılaştırma, zaman serisi) |
-| **Belgeler** | Belge kartları — tıklanınca modal overlay ile detay (özet, tez, varsayım, risk, alpha, format, kaynak link) |
-| **Tahminler** | Filtrelenebilir tablo — 16 sütun + genişletilebilir analiz tezi satırı |
+| **Belgeler** | Sıralanabilir tablo — tıklanabilir satırlar, tıklanınca modal overlay ile detay (özet, tez, varsayım, risk, alpha, tahmin listesi). YouTube videoları için "YouTube'da Ara" referans linki |
+| **Tahminler** | Filtrelenebilir tablo — 16 sütun + genişletilebilir analiz tezi satırı. Öneri filtresi hem hisse (Buy/Sell/Hold) hem FX (Bullish/Bearish/Neutral) terminolojisini destekler |
 | **Parite Analizi** | Varlık bazlı kartlar — ortalama skor, isabet oranı, tahmin sayısı |
 
 ### KPI Metrikleri

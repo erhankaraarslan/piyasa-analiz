@@ -230,7 +230,7 @@ Tek bir agent da doğrudan çağrılabilir:
 | İsabet Oranı % | Hesaplama | Yön isabeti doğru oranı (⏳ hariç) |
 | Ort. Alpha (Consensus) | Hesaplama | Consensus'a göre ort. alpha (%) |
 | Ort. Alpha (Forward) | Hesaplama | Forward'a göre ort. alpha (%) |
-| Belge Başarı Skoru | Hesaplama | Ağırlıklı 0-100 skor + harf notu (A/B/C/D/F) |
+| Belge Başarı Skoru | Hesaplama | Ağırlıklı 0-100 skor + harf notu (A/B/C/D/F). Min 5 değerlendirme gerekir. Alpha yoksa ağırlıklar yeniden dağıtılır. |
 
 #### Tahmin Skorlama Raporu (tahmin düzeyinde performans)
 
@@ -251,7 +251,7 @@ Tek bir agent da doğrudan çağrılabilir:
 | Gerçekleşen Fiyat | Hesaplama | Hedef tarihindeki piyasa fiyatı |
 | Gerçekleşen Getiri % | Hesaplama | (Gerçekleşen − Spot) / Spot × 100 |
 | Hedef Yön | Hesaplama | Yukarı / Aşağı / Sabit |
-| Öneri | Hesaplama | Alpha + RefAlpha tabanlı kural sistemi |
+| Öneri | Hesaplama | Alpha + RefAlpha tabanlı kural sistemi (hisse: Buy/Sell, FX: Bullish/Bearish) |
 | Yön İsabeti | Hesaplama | 1 veya 0 |
 | Hedef Yakınlığı | Hesaplama | max(0, 100 − MAPE × 10) |
 | Tahmin Doğruluğu | Hesaplama | Yön yanlış→0; MAPE<1%→100, 1-3%→75, 3-5%→50, ≥5%→25 |

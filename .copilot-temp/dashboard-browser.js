@@ -71,7 +71,7 @@ new Chart(document.getElementById("chartTimeline"),{
 /* ══════════════════════════════════════════════════════════════════════════
    DOCUMENTS TAB
    ══════════════════════════════════════════════════════════════════════════ */
-function renderDocCards(){
+function renderDocTable(){
   var inst=document.getElementById("docFilterInst").value;
   var fmt=document.getElementById("docFilterFormat").value;
   var sort=document.getElementById("docSort").value;
@@ -102,26 +102,34 @@ function renderDocCards(){
   items.forEach(function(d,idx){
     var grade=getGrade(d["Belge Başarı Skoru"]);
     var scoreNum=d["Belge Başarı Skoru"]||"—";
-    html+='<div class="doc-card" onclick="openDocModal('+idx+')">';
-    html+='<div class="card-header"><div class="left">';
-    html+='<div class="card-title">'+esc(d["Belge Adı"])+'</div>';
-    html+='<div class="card-meta"><span>📅 '+esc(d["Belge Tarihi"])+'</span><span>🏢 '+esc(d["Kurum"])+'</span><span>👤 '+esc(d["Analistler"])+'</span><span>📄 '+esc(d["Format"])+'</span></div>';
-    html+='</div>';
-    html+='<div class="score-badge '+grade+'">'+esc(scoreNum)+'</div>';
-    html+='</div>';
-    html+='<div class="card-stats">';
-    var isabetVal=d["İsabet Oranı %"];
-    html+='<div class="stat"><div class="stat-val">'+esc(isabetVal)+(isabetVal&&!isNaN(parseFloat(isabetVal))?'%':'')+'</div><div class="stat-label">İsabet</div></div>';
-    html+='<div class="stat"><div class="stat-val">'+esc(d["Varlık Sayısı"])+'</div><div class="stat-label">Varlık</div></div>';
-    html+='<div class="stat"><div class="stat-val">'+esc(d["Tahmin Sayısı"])+'</div><div class="stat-label">Tahmin</div></div>';
-    html+='<div class="stat"><div class="stat-val">'+esc(d["Ort. Alpha (Consensus)"])+'</div><div class="stat-label">α Cons.</div></div>';
-    html+='<div class="stat"><div class="stat-val">'+esc(d["Ort. Alpha (Forward)"])+'</div><div class="stat-label">α Fwd.</div></div>';
-    html+='</div>';
-    html+='</div>';
+    var isabetVal=d["İsabet Oranı %"]||"—";
+    var fmtIcon=d["Format"]==="Video"?"🎬":"📄";
+    html+='<tr class="doc-row" onclick="openDocModal('+idx+')" style="cursor:pointer">';
+    html+='<td>'+esc(d["Belge Tarihi"])+'</td>';
+    html+='<td>'+esc(d["Kurum"])+'</td>';
+    html+='<td class="doc-name-cell"><span class="fmt-icon">'+fmtIcon+'</span> '+esc(truncate(d["Belge Adı"],50))+'</td>';
+    html+='<td>'+esc(d["Format"])+'</td>';
+    html+='<td>'+esc(isabetVal)+(isabetVal&&!isNaN(parseFloat(isabetVal))?'%':'')+'</td>';
+    html+='<td>'+esc(d["Varlık Sayısı"])+'</td>';
+    html+='<td>'+esc(d["Tahmin Sayısı"])+'</td>';
+    html+='<td>'+esc(d["Ort. Alpha (Consensus)"])+'</td>';
+    html+='<td>'+esc(d["Ort. Alpha (Forward)"])+'</td>';
+    html+='<td><span class="score-badge '+grade+'" style="height:28px;min-width:44px;font-size:.75rem">'+esc(scoreNum)+'</span></td>';
+    html+='</tr>';
   });
-  if(items.length===0)html='<div style="text-align:center;color:#636b8a;padding:40px">Sonuç bulunamadı</div>';
-  document.getElementById("docGrid").innerHTML=html;
+  if(items.length===0)html='<tr><td colspan="10" style="text-align:center;color:#636b8a;padding:24px">Sonuç bulunamadı</td></tr>';
+  document.getElementById("docBody").innerHTML=html;
   document.getElementById("docCount").innerHTML='<strong>'+items.length+'</strong> / '+DOK_SKOR.length+' belge gösteriliyor';
+}
+
+/** YouTube video linki — doğrudan Kaynak URL veya arama fallback */
+function youtubeVideoLink(d){
+  var kaynak=d["Kaynak"];
+  if(kaynak&&kaynak.indexOf("http")===0)return{url:kaynak,label:"▶ Videoyu İzle"};
+  var belgeAdi=d["Belge Adı"],kurum=d["Kurum"];
+  if(!belgeAdi||!kurum)return null;
+  var q=encodeURIComponent(kurum+" "+belgeAdi);
+  return{url:"https://www.youtube.com/results?search_query="+q,label:"▶ YouTube'da Ara"};
 }
 
 /* ── Document Detail Modal ─────────────────────────────────────────────── */
@@ -130,12 +138,20 @@ function openDocModal(idx){
   var grade=getGrade(d["Belge Başarı Skoru"]);
   var scoreNum=d["Belge Başarı Skoru"]||"—";
   var isabetVal=d["İsabet Oranı %"];
+  var isVideo=d["Format"]==="Video";
   var h='<div class="modal-panel">';
   h+='<button class="modal-close" onclick="closeDocModal()">✕</button>';
   h+='<div class="modal-header">';
   h+='<div class="modal-title">'+esc(d["Belge Adı"])+'</div>';
-  h+='<div class="modal-meta"><span>📅 '+esc(d["Belge Tarihi"])+'</span><span>🏢 '+esc(d["Kurum"])+'</span><span>👤 '+esc(d["Analistler"])+'</span><span>📄 '+esc(d["Format"])+'</span>';
+  h+='<div class="modal-meta"><span>📅 '+esc(d["Belge Tarihi"])+'</span><span>🏢 '+esc(d["Kurum"])+'</span><span>👤 '+esc(d["Analistler"])+'</span><span>'+(isVideo?'🎬':'📄')+' '+esc(d["Format"])+'</span>';
   h+='<span class="score-badge '+grade+'" style="margin-left:auto">'+esc(scoreNum)+'</span></span></div>';
+  /* YouTube referans link */
+  if(isVideo){
+    var yt=youtubeVideoLink(d);
+    if(yt){
+      h+='<div class="modal-ref-links"><a href="'+esc(yt.url)+'" target="_blank" rel="noopener" class="yt-ref-link">'+esc(yt.label)+'</a></div>';
+    }
+  }
   h+='</div>';
   h+='<div class="modal-stats">';
   h+='<div class="stat"><div class="stat-val">'+esc(isabetVal)+(isabetVal&&!isNaN(parseFloat(isabetVal))?'%':'')+'</div><div class="stat-label">İsabet Oranı</div></div>';
@@ -150,6 +166,32 @@ function openDocModal(idx){
   if(d["Varsayımlar & Gerçekleşme"])h+='<div class="field"><div class="field-label">Varsayımlar & Gerçekleşme</div><div class="field-value">'+linkify(d["Varsayımlar & Gerçekleşme"])+'</div></div>';
   if(d["Varsayım Etkisi"])h+='<div class="field"><div class="field-label">Varsayım Etkisi</div><div class="field-value">'+linkify(d["Varsayım Etkisi"])+'</div></div>';
   if(d["Risk Analizi"])h+='<div class="field"><div class="field-label">Risk Analizi</div><div class="field-value">'+linkify(d["Risk Analizi"])+'</div></div>';
+
+  /* Bu belgeye ait tahminler tablosu */
+  var belgeDate=d["Belge Tarihi"];
+  var belgeKurum=d["Kurum"];
+  var belgeName=d["Belge Adı"];
+  var tahminler=TAH_SKOR.filter(function(t){return t["Tahmin Tarihi"]===belgeDate&&t["Kurum"]===belgeKurum});
+  if(tahminler.length>0){
+    h+='<div class="field"><div class="field-label">Tahminler ('+tahminler.length+')</div>';
+    h+='<div class="modal-forecast-table"><table><thead><tr><th>Varlık</th><th>Vade</th><th>Spot</th><th>Hedef</th><th>Gerçekleşen</th><th>MAPE</th><th>İsabet</th><th>Skor</th></tr></thead><tbody>';
+    tahminler.forEach(function(t){
+      var hit=t["Yön İsabeti"];
+      var hitHtml=hit==="1"?'<span class="dir-ok">✓</span>':hit==="0"?'<span class="dir-fail">✗</span>':'<span class="dir-pending">⏳</span>';
+      var tGrade=getGrade(t["Başarı Skoru"]);
+      h+='<tr>';
+      h+='<td><strong>'+esc(t["Varlık"])+'</strong></td>';
+      h+='<td>'+esc(t["Vade"])+'</td>';
+      h+='<td class="text-right">'+fmtNum(t["Tahmin tarihindeki Fiyat"])+'</td>';
+      h+='<td class="text-right">'+fmtNum(t["Hedef Fiyat"])+'</td>';
+      h+='<td class="text-right">'+fmtNum(t["Gerçekleşen Fiyat"])+'</td>';
+      h+='<td>'+esc(t["Error (MAPE)"])+'</td>';
+      h+='<td>'+hitHtml+'</td>';
+      h+='<td><span class="score-badge '+tGrade+'" style="height:24px;min-width:36px;font-size:.7rem">'+esc(t["Başarı Skoru"])+'</span></td>';
+      h+='</tr>';
+    });
+    h+='</tbody></table></div></div>';
+  }
   h+='</div></div>';
   var overlay=document.getElementById("docModal");
   overlay.innerHTML=h;
@@ -166,10 +208,10 @@ function closeDocModal(){
 document.getElementById("docModal").addEventListener("click",function(e){if(e.target===this)closeDocModal()});
 document.addEventListener("keydown",function(e){if(e.key==="Escape")closeDocModal()});
 ["docFilterInst","docFilterFormat","docSort"].forEach(function(id){
-  document.getElementById(id).addEventListener("change",renderDocCards);
+  document.getElementById(id).addEventListener("change",renderDocTable);
 });
-document.getElementById("docSearch").addEventListener("input",renderDocCards);
-renderDocCards();
+document.getElementById("docSearch").addEventListener("input",renderDocTable);
+renderDocTable();
 
 /* ══════════════════════════════════════════════════════════════════════════
    FORECASTS TAB
@@ -209,7 +251,10 @@ function filterForecasts(){
 
 function recPillClass(r){
   if(!r)return"pending";
-  var m={"Strong Buy":"strong-buy","Buy":"buy","Hold":"hold","Reduce":"reduce","Sell":"sell","Strong Sell":"strong-sell","⏳":"pending","—":"pending"};
+  var m={"Strong Buy":"strong-buy","Buy":"buy","Hold":"hold","Reduce":"reduce","Sell":"sell","Strong Sell":"strong-sell",
+    "Strong Bullish":"strong-bullish","Bullish":"bullish","Slightly Bullish":"slightly-bullish","Neutral":"neutral",
+    "Slightly Bearish":"slightly-bearish","Bearish":"bearish","Strong Bearish":"strong-bearish",
+    "⏳":"pending","—":"pending"};
   return m[r]||"pending"
 }
 

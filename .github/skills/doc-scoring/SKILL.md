@@ -27,7 +27,7 @@ Aşağıdaki dosyaların mevcut olduğunu kontrol et:
 npx tsx src/analyzer/doc-score.ts analizler/belgeler.csv analizler/tahminler.csv analizler/forecasts-results.json
 ```
 
-### 3. Skorlama Sütunları (16 sütun)
+### 3. Skorlama Sütunları (17 sütun)
 
 | # | Sütun | Tür | Açıklama | Kaynak |
 |---|-------|-----|----------|--------|
@@ -41,18 +41,29 @@ npx tsx src/analyzer/doc-score.ts analizler/belgeler.csv analizler/tahminler.csv
 | 8 | **Varsayımlar & Gerçekleşme** | Çıkarım | Varsayımlar ve gerçekleşme notları (✅/❌/⚠️/⏳) | Belgeler CSV "Varsayım Gerçekleşme" |
 | 9 | **Varsayım Etkisi** | Hesaplama | Yüksek (≥%80) / Orta (%50-79) / Düşük (<%50) | `(✅×1 + ⚠️×0.5) / (✅+❌+⚠️)` |
 | 10 | **Risk Analizi** | Çıkarım | Başlıca riskler | Belgeler CSV |
-| 11 | **Varlık Sayısı** | Hesaplama | Belgede tahmin edilen farklı parite sayısı | Tahminler CSV unique Varlık count |
-| 12 | **Tahmin Sayısı** | Hesaplama | Varlık × vade toplam tahmin sayısı | Tahminler CSV row count |
-| 13 | **İsabet Oranı %** | Hesaplama | Yön isabeti doğru olan tahminlerin oranı | `✅ / (✅ + ❌)` — ⏳ hariç |
-| 14 | **Ort. Alpha (Consensus)** | Hesaplama | Consensus'a göre ortalama alpha (%) | `ort(|consensus−actual| − |forecast−actual|) / spot × 100` |
-| 15 | **Ort. Alpha (Forward)** | Hesaplama | Forward'a göre ortalama alpha (%) | `ort(|forward−actual| − |forecast−actual|) / spot × 100` |
-| 16 | **Belge Başarı Skoru** | Hesaplama | Ağırlıklı 0-100 skor + harf notu | Formül aşağıda |
+| 11 | **Kaynak** | Çıkarım | Video için YouTube URL, PDF için boş | Belgeler CSV |
+| 12 | **Varlık Sayısı** | Hesaplama | Belgede tahmin edilen farklı parite sayısı | Tahminler CSV unique Varlık count (kurum+tarih bazlı eşleşme) |
+| 13 | **Tahmin Sayısı** | Hesaplama | Varlık × vade toplam tahmin sayısı | Tahminler CSV row count (kurum+tarih bazlı eşleşme) |
+| 14 | **İsabet Oranı %** | Hesaplama | Yön isabeti doğru olan tahminlerin oranı | `✅ / (✅ + ❌)` — ⏳ hariç |
+| 15 | **Ort. Alpha (Consensus)** | Hesaplama | Consensus'a göre ortalama alpha (%) | `ort(|consensus−actual| − |forecast−actual|) / spot × 100` |
+| 16 | **Ort. Alpha (Forward)** | Hesaplama | Forward'a göre ortalama alpha (%) | `ort(|forward−actual| − |forecast−actual|) / spot × 100` |
+| 17 | **Belge Başarı Skoru** | Hesaplama | Ağırlıklı 0-100 skor + harf notu | Formül aşağıda |
 
 ### 4. Belge Başarı Skoru Formülü
 
+**Alpha verisi varken:**
 ```
 Belge Başarı Skoru = Yön İsabeti × 0.40 + Hedef Yakınlığı × 0.30 + Alpha Skoru × 0.20 + Varsayım Doğruluğu × 0.10
 ```
+
+**Alpha verisi yokken (consensus/forward null):**
+```
+Belge Başarı Skoru = Yön İsabeti × 0.50 + Hedef Yakınlığı × 0.35 + Varsayım Doğruluğu × 0.15
+```
+
+**Minimum örneklem eşiği:** Belge skorlaması için en az **5 değerlendirilen tahmin** gereklidir. 5'in altında değerlendirilen tahmin varsa **gerçek skor hesaplanır** ancak ⚠ uyarısı ile işaretlenir (skor 0'a düşürülmez).
+
+**Belge-Tahmin eşleştirmesi:** Tahminler CSV'de `Belge Adı` sütunu mevcutsa kurum+tarih+belge_adı bazlı eşleştirme yapılır. Yoksa kurum+tarih bazlı fallback uygulanır. Bu özellikle aynı gün+kurum altında birden fazla belge olduğunda (ör. Devrim Akyıl YouTube videoları) çakışmayı önler.
 
 **Bileşen dönüşümleri:**
 
@@ -96,7 +107,7 @@ Script otomatik olarak aşağıdaki dosyaları üretir:
 
 ### Önemli Kurallar
 
-1. **Sütun kısıtlaması**: Tabloya yukarıdaki 16 sütun dışında başka sütun EKLEME.
+1. **Sütun kısıtlaması**: Tabloya yukarıdaki 17 sütun dışında başka sütun EKLEME.
 2. **Deterministik**: Skorlama tamamen script bazlı — AI yargısı kullanma, script çıktısını olduğu gibi kullan.
 3. **Son rapor**: Eğer belgenin tahminleri henüz değerlendirilmemişse (tüm ⏳), Belge Başarı Skoru = "⏳".
 4. **Consensus/Forward eksik**: Alpha verisi yoksa ilgili sütun "—" olur, Başarı Skoru'nda alpha ağırlığı diğerlerine dağıtılır.

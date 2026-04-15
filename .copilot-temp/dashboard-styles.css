@@ -55,7 +55,7 @@ a{color:var(--accent);text-decoration:none}
 .result-count{font-size:.8rem;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .result-count strong{color:var(--text);font-size:.95rem}
 
-.doc-grid{display:grid;grid-template-columns:1fr;gap:12px}
+/* Document table */
 .doc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all .2s;cursor:pointer}
 .doc-card:hover{border-color:var(--accent);box-shadow:0 4px 24px rgba(108,140,255,.15)}
 .doc-card .card-header{padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
@@ -142,6 +142,13 @@ tr:last-child td{border-bottom:none}
 .rec-pill.reduce{background:rgba(251,146,60,.2);color:#fb923c}
 .rec-pill.sell{background:rgba(248,113,113,.2);color:#f87171}
 .rec-pill.strong-sell{background:rgba(220,38,38,.2);color:#ef4444}
+.rec-pill.strong-bullish{background:rgba(52,211,153,.2);color:#34d399}
+.rec-pill.bullish{background:rgba(108,140,255,.2);color:#6c8cff}
+.rec-pill.slightly-bullish{background:rgba(78,205,196,.2);color:#4ecdc4}
+.rec-pill.neutral{background:rgba(251,191,36,.2);color:#fbbf24}
+.rec-pill.slightly-bearish{background:rgba(251,146,60,.2);color:#fb923c}
+.rec-pill.bearish{background:rgba(248,113,113,.2);color:#f87171}
+.rec-pill.strong-bearish{background:rgba(220,38,38,.2);color:#ef4444}
 .rec-pill.pending{background:var(--surface3);color:var(--text3)}
 
 /* Direction icons */
@@ -169,7 +176,6 @@ tr:last-child td{border-bottom:none}
 /* Responsive */
 @media(max-width:768px){
   .kpi-grid{grid-template-columns:repeat(2,1fr);padding:16px}
-  .doc-grid{grid-template-columns:1fr}
   .header,.nav,.tab-content{padding-left:16px;padding-right:16px}
   .kpi .value{font-size:1.4rem}
 }
@@ -179,3 +185,21 @@ tr:last-child td{border-bottom:none}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+
+/* Document table rows */
+.doc-row:hover td{background:var(--surface2)}
+.doc-name-cell{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-name-cell .fmt-icon{margin-right:4px}
+
+/* YouTube ref link in modal */
+.modal-ref-links{margin-top:10px;display:flex;gap:10px}
+.yt-ref-link{display:inline-flex;align-items:center;gap:6px;background:rgba(255,0,0,.12);color:#ff4444;padding:6px 14px;border-radius:var(--radius-sm);font-size:.78rem;font-weight:600;transition:background .2s}
+.yt-ref-link:hover{background:rgba(255,0,0,.22);text-decoration:none;color:#ff6666}
+
+/* Modal forecast table */
+.modal-forecast-table{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border);margin-top:6px;max-height:300px;overflow-y:auto}
+.modal-forecast-table table{width:100%;border-collapse:collapse;font-size:.78rem}
+.modal-forecast-table th{background:var(--surface2);color:var(--text2);font-weight:600;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:.7rem;text-transform:uppercase}
+.modal-forecast-table td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text2)}
+.modal-forecast-table tr:hover td{background:var(--surface2)}
+.modal-forecast-table tr:last-child td{border-bottom:none}

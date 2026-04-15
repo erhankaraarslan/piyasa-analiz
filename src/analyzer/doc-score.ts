@@ -14,6 +14,7 @@ interface ScoreRow {
   varsayimlarGerceklesme: string;
   varsayimEtkisi: string;            // Yüksek / Orta / Düşük
   riskAnalizi: string;
+  kaynak: string;                    // Video URL veya PDF path
   varlikSayisi: number;
   tahminSayisi: number;
   isabetOrani: string;               // %
@@ -34,6 +35,7 @@ interface BelgelerRow {
   "Risk Analizi": string;
   "Varsayım Gerçekleşme": string;
   "Tahmin Sapması": string;
+  "Kaynak"?: string;
 }
 
 interface TahminlerRow {
@@ -63,6 +65,7 @@ interface ForecastResult {
   alpha_vs_consensus_pct: number | null;
   alpha_vs_forward_pct: number | null;
   source: string | null;
+  institution?: string;
 }
 
 // ── CSV Parsing (sade, dış bağımlılık yok) ──
@@ -210,13 +213,21 @@ function main() {
 
   console.log(`\n📊 Belge Skorlama — ${belgeler.length} belge, ${tahminler.length} tahmin, ${forecastResults.length} sonuç\n`);
 
+  // Tahminlerde "Belge Adı" sütunu varsa daha spesifik eşleştirme yap (aynı gün+kurum çakışmasını önler)
+  const tahminHasBelgeAdi = tahminler.length > 0 && "Belge Adı" in tahminler[0] && tahminler.some(t => (t as any)["Belge Adı"]);
+
   const scores: ScoreRow[] = [];
 
   for (const belge of belgeler) {
     const tarih = belge["Belge Tarihi"];
+    const kurum = belge["Kurum"];
 
     // Tahminler: bu belgeye ait satırlar
-    const belgeTahminleri = tahminler.filter((t) => t["Tahmin Tarihi"] === tarih);
+    // Belge Adı sütunu varsa kurum+tarih+belgeAdı, yoksa kurum+tarih bazlı eşleştirme
+    const belgeAdi = belge["Belge Adı"];
+    const belgeTahminleri = tahminHasBelgeAdi
+      ? tahminler.filter((t) => t["Tahmin Tarihi"] === tarih && t["Kurum"] === kurum && (t as any)["Belge Adı"] === belgeAdi)
+      : tahminler.filter((t) => t["Tahmin Tarihi"] === tarih && t["Kurum"] === kurum);
 
     // Unique varlıklar
     const varliklar = new Set(belgeTahminleri.map((t) => t["Varlık"]));
@@ -232,8 +243,8 @@ function main() {
     // Varsayım etkisi
     const { skor: varsayimSkor, etiket: varsayimEtkisi } = calcVarsayimEtkisi(belge["Varsayım Gerçekleşme"]);
 
-    // Alpha hesaplama: forecasts-results.json'dan bu tarih (yüzdesel — pariteler arası adil)
-    const belgeForecastResults = forecastResults.filter((r) => r.date === tarih);
+    // Alpha hesaplama: forecasts-results.json'dan bu tarih+kurum (yüzdesel — pariteler arası adil)
+    const belgeForecastResults = forecastResults.filter((r) => r.date === tarih && r.institution === kurum);
 
     const alphaConsPctVals = belgeForecastResults
       .filter((r) => r.alpha_vs_consensus_pct !== null && r.alpha_vs_consensus_pct !== undefined)
@@ -263,17 +274,24 @@ function main() {
 
     // ── Belge Başarı Skoru ──
     // Yön %40 + Hedef yakınlığı %30 + Alpha %20 + Varsayım %10
+    // Minimum 5 değerlendirilen tahmin gerekli
+    const MIN_EVAL_THRESHOLD = 5;
     const yonSkor = isabetOrani; // already 0-100
     const hedefSkor = ortSapmaPct !== null ? sapmaPctToSkor(ortSapmaPct) : 50;
-    // Alpha skoru: yüzdesel ortalama
+    // Alpha skoru: yüzdesel ortalama — null ise neutral (50) ama ağırlık düşürülür
+    const hasAlpha = ortAlphaConsPct !== null || ortAlphaFwdPct !== null;
     const alphaRawPct = ortAlphaConsPct !== null && ortAlphaFwdPct !== null
       ? (ortAlphaConsPct + ortAlphaFwdPct) / 2
       : ortAlphaConsPct ?? ortAlphaFwdPct ?? 0;
-    const alphaSkor = alphaPctToSkor(alphaRawPct);
+    const alphaSkor = hasAlpha ? alphaPctToSkor(alphaRawPct) : 0;
     const varsayimSkorNorm = varsayimSkor; // already 0-100
 
+    // Alpha verisi yoksa ağırlığı yön ve hedefe dağıt: Yön %50 + Hedef %35 + Varsayım %15
+    // toplamDegerl < MIN_EVAL_THRESHOLD olsa bile gerçek skoru hesapla (çıktıda ⚠ uyarısı verilir)
     const belgeBasariSkoru = toplamDegerl > 0
-      ? yonSkor * 0.40 + hedefSkor * 0.30 + alphaSkor * 0.20 + varsayimSkorNorm * 0.10
+      ? hasAlpha
+        ? yonSkor * 0.40 + hedefSkor * 0.30 + alphaSkor * 0.20 + varsayimSkorNorm * 0.10
+        : yonSkor * 0.50 + hedefSkor * 0.35 + varsayimSkorNorm * 0.15
       : 0;
 
     const row: ScoreRow = {
@@ -287,14 +305,17 @@ function main() {
       varsayimlarGerceklesme: belge["Varsayım Gerçekleşme"],
       varsayimEtkisi,
       riskAnalizi: belge["Risk Analizi"],
+      kaynak: belge["Kaynak"] ?? "",
       varlikSayisi,
       tahminSayisi,
       isabetOrani: toplamDegerl > 0 ? `%${isabetOrani.toFixed(1)}` : "⏳",
       ortalamaAlphaConsensus: ortAlphaConsPct !== null ? `${ortAlphaConsPct >= 0 ? "+" : ""}${ortAlphaConsPct.toFixed(2)}%` : "—",
       ortalamaAlphaForward: ortAlphaFwdPct !== null ? `${ortAlphaFwdPct >= 0 ? "+" : ""}${ortAlphaFwdPct.toFixed(2)}%` : "—",
-      belgeBasariSkoru: toplamDegerl > 0
+      belgeBasariSkoru: toplamDegerl >= MIN_EVAL_THRESHOLD
         ? `${belgeBasariSkoru.toFixed(1)} (${harfNotu(belgeBasariSkoru)})`
-        : "⏳",
+        : toplamDegerl > 0
+          ? `⚠ ${belgeBasariSkoru.toFixed(1)} (${harfNotu(belgeBasariSkoru)}) [${toplamDegerl}<${MIN_EVAL_THRESHOLD} değerlendirme]`
+          : "⏳",
     };
     scores.push(row);
   }
@@ -330,6 +351,7 @@ function main() {
   const csvHeaders = [
     "Belge Tarihi", "Kurum", "Analistler", "Format", "Özet Metin", "Belge Adı",
     "Yatırım Tezi", "Varsayımlar & Gerçekleşme", "Varsayım Etkisi", "Risk Analizi",
+    "Kaynak",
     "Varlık Sayısı", "Tahmin Sayısı", "İsabet Oranı %",
     "Ort. Alpha (Consensus)", "Ort. Alpha (Forward)", "Belge Başarı Skoru",
   ];
@@ -337,6 +359,7 @@ function main() {
   const csvRows = scores.map((s) => [
     s.belgeTarihi, s.kurum, s.analistler, s.format, s.ozetMetin, s.belgeAdi,
     s.yatirimTezi, s.varsayimlarGerceklesme, s.varsayimEtkisi, s.riskAnalizi,
+    s.kaynak,
     String(s.varlikSayisi), String(s.tahminSayisi), s.isabetOrani,
     s.ortalamaAlphaConsensus, s.ortalamaAlphaForward, s.belgeBasariSkoru,
   ]);
@@ -363,7 +386,11 @@ function main() {
   mdLines.push("## Skor Formülü");
   mdLines.push("");
   mdLines.push("```");
-  mdLines.push("Belge Başarı Skoru = Yön İsabeti × 0.40 + Hedef Yakınlığı × 0.30 + Alpha Skoru × 0.20 + Varsayım Doğruluğu × 0.10");
+  mdLines.push("Alpha verisi varken:");
+  mdLines.push("  Belge Başarı Skoru = Yön İsabeti × 0.40 + Hedef Yakınlığı × 0.30 + Alpha Skoru × 0.20 + Varsayım Doğruluğu × 0.10");
+  mdLines.push("Alpha verisi yokken:");
+  mdLines.push("  Belge Başarı Skoru = Yön İsabeti × 0.50 + Hedef Yakınlığı × 0.35 + Varsayım Doğruluğu × 0.15");
+  mdLines.push("Minimum 5 değerlendirilen tahmin gereklidir. Altında ⚠ uyarısı verilir.");
   mdLines.push("```");
   mdLines.push("");
   mdLines.push("| Not | Aralık |");

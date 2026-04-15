@@ -38,4 +38,15 @@ Kod değişikliklerinde aşağıdaki durumlarda `README.md` dosyasını güncell
 - `forecasts.json` formatında consensus ve forward değerleri de yer alır — rapordaki ilgili satırlardan çıkarılır; hisse senetlerinde sadece forecast12m doldurulur
 - FX pariteleri Frankfurter API, BIST hisse senetleri Yahoo Finance v8 chart API (ticker.IS formatı) üzerinden fiyatlanır
 - Hisse senedi tahminlerinde benchmark = BIST100 (XU100.IS); FX'te benchmark = aynı parite
+- FX pariteleri için öneri terminolojisi: Bullish/Bearish/Neutral (Buy/Sell kullanılmaz). Hisse senetleri için: Buy/Sell/Hold
+- Transkript tarihleri yt-dlp'nin `upload_date` metadata alanından alınır (göreceli tarih sadece cutoff filtresi için kullanılır)
+- Belge skorlama minimum 5 değerlendirilen tahmin gerektirir; altında ⚠ uyarısı verilir ancak gerçek skor hesaplanır (0'a düşürülmez)
+- Belge skorlamada tahmin eşleşmesi kurum+tarih bazlıdır; Tahminler CSV'de `Belge Adı` sütunu mevcutsa kurum+tarih+belge_adı bazlı eşleştirme yapılır
+- Alpha verisi yoksa (consensus/forward null) alpha ağırlığı yön ve hedefe dağıtılır (0.50/0.35/0.15)
+- "Sabit" tahminler (|Beklenen Getiri| < 0.1%) değerlendirilir, atlanmaz — ±%0.5 toleransla yön isabeti kontrol edilir. Sabit tahminlere "Neutral" (FX) veya "Hold" (hisse) önerisi otomatik atanır
+- `forecasts.json` kayıtlarında `institution` ve `documentName` alanları zorunludur — doc-score.ts bu alanlarla eşleştirme yapar
+- Tahminler CSV'de `Belge Adı` sütunu zorunludur (14. sütun) — belgeler tablosundaki Belge Adı ile birebir aynı olmalı
+- Her transkript benzersiz analiz edilmelidir — şablon/genel metin yasaktır
+- Transkriptlerden sözel tahminler (fiyat hedefleri, destek/direnç seviyeleri) çıkarılmalıdır
+- TÜM PDF raporlardan tahmin çıkarılmalıdır — sadece son raporlar değil, eski raporlar dahil
 - Varsayım Gerçekleşme sadece ardışık raporların cross-reference'ı ile belirlenir — dış kaynak kullanılmaz

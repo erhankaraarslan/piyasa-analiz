@@ -332,35 +332,55 @@ function hedefYon(beklenenGetiri: number): string {
 function yonIsabetiCheck(spot: number, hedef: number, gerceklesen: number): boolean {
   const beklenenYon = hedef - spot;
   const gercekYon = gerceklesen - spot;
-  if (Math.abs(beklenenYon) < 1e-10) return true; // Sabit → her zaman doğru
+  // Sabit tahmin: gerçekleşen de yakınsa doğru (±%0.5 tolerans)
+  if (Math.abs(beklenenYon) < 1e-10 || (spot > 0 && Math.abs(beklenenYon / spot) < 0.001)) {
+    return spot > 0 ? Math.abs(gercekYon / spot) < 0.005 : true;
+  }
   return (beklenenYon > 0 && gercekYon > 0) || (beklenenYon < 0 && gercekYon < 0);
 }
 
 // ── Öneri Sistemi ──
 
-const ONERI_LEVELS = ["Strong Sell", "Sell", "Reduce", "Hold", "Buy", "Strong Buy"] as const;
-type OneriLevel = (typeof ONERI_LEVELS)[number];
+const ONERI_LEVELS_STOCK = ["Strong Sell", "Sell", "Reduce", "Hold", "Buy", "Strong Buy"] as const;
+const ONERI_LEVELS_FX = ["Strong Bearish", "Bearish", "Slightly Bearish", "Neutral", "Slightly Bullish", "Bullish", "Strong Bullish"] as const;
+type OneriLevel = string;
 
-function calcOneri(beklenenGetiri: number, alpha: number, refAlpha: number): OneriLevel {
+function calcOneri(beklenenGetiri: number, alpha: number, refAlpha: number, varlik: string): OneriLevel {
+  const isFx = !isStock(varlik);
+  const levels = isFx
+    ? ["Strong Bearish", "Bearish", "Slightly Bearish", "Neutral", "Slightly Bullish", "Bullish", "Strong Bullish"]
+    : ["Strong Sell", "Sell", "Reduce", "Hold", "Buy", "Strong Buy"];
+
   // Base recommendation from Alpha
-  let level: OneriLevel;
-  if (beklenenGetiri > 20 && alpha > 10) level = "Strong Buy";
-  else if (beklenenGetiri > 10 && alpha > 5) level = "Buy";
-  else if (alpha > 5) level = "Buy";
-  else if (beklenenGetiri < -20 && alpha < -10) level = "Strong Sell";
-  else if (alpha < -10) level = "Sell";
-  else if (alpha < -5) level = "Reduce";
-  else level = "Hold";
-
-  // Conviction adjustment from RefAlpha
-  const idx = ONERI_LEVELS.indexOf(level);
-  if (refAlpha > 0.5 && idx < ONERI_LEVELS.length - 1) {
-    level = ONERI_LEVELS[idx + 1];
-  } else if (refAlpha < -0.5 && idx > 0) {
-    level = ONERI_LEVELS[idx - 1];
+  let levelIdx: number;
+  if (isFx) {
+    // FX: 7-level scale
+    if (beklenenGetiri > 20 && alpha > 10) levelIdx = 6; // Strong Bullish
+    else if (beklenenGetiri > 10 && alpha > 5) levelIdx = 5; // Bullish
+    else if (alpha > 5) levelIdx = 4; // Slightly Bullish
+    else if (beklenenGetiri < -20 && alpha < -10) levelIdx = 0; // Strong Bearish
+    else if (alpha < -10) levelIdx = 1; // Bearish
+    else if (alpha < -5) levelIdx = 2; // Slightly Bearish
+    else levelIdx = 3; // Neutral
+  } else {
+    // Stocks: 6-level scale
+    if (beklenenGetiri > 20 && alpha > 10) levelIdx = 5; // Strong Buy
+    else if (beklenenGetiri > 10 && alpha > 5) levelIdx = 4; // Buy
+    else if (alpha > 5) levelIdx = 4; // Buy
+    else if (beklenenGetiri < -20 && alpha < -10) levelIdx = 0; // Strong Sell
+    else if (alpha < -10) levelIdx = 1; // Sell
+    else if (alpha < -5) levelIdx = 2; // Reduce
+    else levelIdx = 3; // Hold
   }
 
-  return level;
+  // Conviction adjustment from RefAlpha
+  if (refAlpha > 0.5 && levelIdx < levels.length - 1) {
+    levelIdx++;
+  } else if (refAlpha < -0.5 && levelIdx > 0) {
+    levelIdx--;
+  }
+
+  return levels[levelIdx];
 }
 
 // ── Rate Cache ──
@@ -397,7 +417,9 @@ async function main() {
   // ── Collect unique trailing dates needed ──
   const trailingRequests = new Set<string>(); // "pair:date"
   for (const t of tahminler) {
-    if (t["Yön İsabeti"] === "⏳") continue;
+    const gerceklesenStr = t["Gerçekleşen Fiyat"];
+    // Gerçekleşen fiyat yoksa → vade dolmamış, trailing gerekmez
+    if (!gerceklesenStr || gerceklesenStr === "⏳" || gerceklesenStr === "—") continue;
     const vadeAy = parseVadeMonths(t["Vade"]);
     const trailingDate = subtractMonths(t["Tahmin Tarihi"], vadeAy);
     const trailingPair = isStock(t["Varlık"]) ? "BIST100" : t["Varlık"];
@@ -437,7 +459,7 @@ async function main() {
     const vade = t["Vade"];
     const vadeAy = parseVadeMonths(vade);
     const gerceklesenStr = t["Gerçekleşen Fiyat"];
-    const beklesik = t["Yön İsabeti"] === "⏳";
+    const hasGerceklesen = gerceklesenStr && gerceklesenStr !== "⏳" && gerceklesenStr !== "—";
 
     // Benchmark: FX için aynı parite, hisseler için BIST100
     const benchmark = isStock(varlik) ? "BIST100" : varlik;
@@ -448,7 +470,7 @@ async function main() {
     // Hedef Yön
     const yon = hedefYon(beklenenGetiri);
 
-    if (beklesik || !gerceklesenStr || gerceklesenStr === "⏳" || gerceklesenStr === "—") {
+    if (!hasGerceklesen) {
       // Henüz vade dolmamış — sadece çıkarım sütunları doldur
       scores.push({
         tahminTarihi: t["Tahmin Tarihi"],
@@ -551,10 +573,12 @@ async function main() {
       refAlpha = alpha / Math.max(Math.abs(beklenenGetiri), 0.05);
     }
 
-    // Öneri
-    const oneri = alpha !== null && refAlpha !== null
-      ? calcOneri(beklenenGetiri, alpha, refAlpha)
-      : "—";
+    // Öneri — Sabit tahminlerde yönsüz öneri: Neutral (FX) / Hold (hisse)
+    const oneri = yon === "Sabit"
+      ? (isStock(varlik) ? "Hold" : "Neutral")
+      : alpha !== null && refAlpha !== null
+        ? calcOneri(beklenenGetiri, alpha, refAlpha, varlik)
+        : "—";
 
     // Başarı Skoru
     const alphaSkor = alpha !== null ? alphaToSkor(alpha) : 50;
@@ -691,6 +715,7 @@ async function main() {
   mdLines.push("");
   mdLines.push("## Öneri Kuralları");
   mdLines.push("");
+  mdLines.push("### Hisse Senetleri");
   mdLines.push("| Koşul | Öneri |");
   mdLines.push("|-------|-------|");
   mdLines.push("| Beklenen > 20% VE Alpha > 10% | Strong Buy |");
@@ -700,6 +725,17 @@ async function main() {
   mdLines.push("| Alpha < -10% | Sell |");
   mdLines.push("| Alpha < -5% | Reduce |");
   mdLines.push("| -5% ≤ Alpha ≤ 5% | Hold |");
+  mdLines.push("");
+  mdLines.push("### FX Pariteleri");
+  mdLines.push("| Koşul | Öneri |");
+  mdLines.push("|-------|-------|");
+  mdLines.push("| Beklenen > 20% VE Alpha > 10% | Strong Bullish |");
+  mdLines.push("| Beklenen > 10% VE Alpha > 5% | Bullish |");
+  mdLines.push("| Alpha > 5% | Slightly Bullish |");
+  mdLines.push("| Beklenen < -20% VE Alpha < -10% | Strong Bearish |");
+  mdLines.push("| Alpha < -10% | Bearish |");
+  mdLines.push("| Alpha < -5% | Slightly Bearish |");
+  mdLines.push("| -5% ≤ Alpha ≤ 5% | Neutral |");
   mdLines.push("");
   mdLines.push("**Conviction düzeltmesi:** RefAlpha > +0.5 → bir kademe yukarı, RefAlpha < -0.5 → bir kademe aşağı");
 
