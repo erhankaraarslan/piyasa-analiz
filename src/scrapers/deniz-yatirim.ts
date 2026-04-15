@@ -31,11 +31,15 @@ export class DenizYatirimScraper extends BaseScraper {
       console.log(`  🌐 ${category.url}`);
 
       // Sayfa 1'i Playwright ile aç (DOM'dan box-list öğelerini çıkarmak için)
+      // Not: Site F5 BIG-IP WAF kullandığı için tüm istekler gerçek sayfa navigasyonu ile yapılmalı.
+      // "networkidle" yerine "domcontentloaded" kullanılır (site analytics/long-poll bağlantıları yüzünden idle olmaz).
       const page = await context.newPage();
       await page.goto(category.url, {
-        waitUntil: "networkidle",
+        waitUntil: "domcontentloaded",
         timeout: CONFIG.browser.timeout,
       });
+      // İçerik yüklenmesini bekle
+      await page.waitForSelector(".box-list .box", { timeout: 15_000 }).catch(() => {});
       await page.waitForTimeout(2_000);
 
       // Listing sayfasından bülten öğelerini çıkar
@@ -50,7 +54,7 @@ export class DenizYatirimScraper extends BaseScraper {
         }));
       });
 
-      // Sayfa 2 varsa onu da çek (pagination: /DailyNewsletter?page=2)
+      // Sayfa 2 varsa onu da çek — gerçek sayfa navigasyonu ile
       const paginationHrefs = await page.evaluate(() => {
         const links = document.querySelectorAll(
           '.pagination a[href*="page="]',
@@ -63,26 +67,32 @@ export class DenizYatirimScraper extends BaseScraper {
         return [...hrefs];
       });
 
-      await page.close();
-
-      // Ek sayfaları context.request ile çek
       for (const href of paginationHrefs) {
-        const pageUrl = `${BASE_URL}${href}`;
-        const res = await context.request.get(pageUrl);
-        const html = await res.text();
-        const matches = [
-          ...html.matchAll(
-            /<h3[^>]*class="title"[^>]*>(.*?)<\/h3>[\s\S]*?data-ajax-href="([^"]*)"/g,
-          ),
-        ];
-        for (const m of matches) {
-          items.push({ title: m[1].trim(), detailHref: m[2] });
-        }
+        const pageUrl = href.startsWith("http") ? href : `${BASE_URL}${href}`;
+        await page.goto(pageUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: CONFIG.browser.timeout,
+        });
+        await page.waitForSelector(".box-list .box", { timeout: 15_000 }).catch(() => {});
+        await page.waitForTimeout(1_000);
+
+        const pageItems = await page.evaluate(() => {
+          const boxes = document.querySelectorAll(".box-list .box");
+          return Array.from(boxes).map((b) => ({
+            title: b.querySelector("h3")?.textContent?.trim() ?? "",
+            detailHref:
+              b
+                .querySelector("button[data-ajax-href]")
+                ?.getAttribute("data-ajax-href") ?? "",
+          }));
+        });
+        items.push(...pageItems);
       }
 
       console.log(`  📋 Toplam ${items.length} bülten bulundu`);
 
       // Her bülten için Detail sayfasından PDF URL'sini çek
+      // WAF context.request.get() ham isteklerini bloklar → page navigasyonu kullanılır
       for (const item of items) {
         if (!item.detailHref) continue;
 
@@ -91,8 +101,13 @@ export class DenizYatirimScraper extends BaseScraper {
         const detailUrl = `${BASE_URL}${detailPath}`;
 
         try {
-          const res = await context.request.get(detailUrl);
-          const html = await res.text();
+          await page.goto(detailUrl, {
+            waitUntil: "domcontentloaded",
+            timeout: 30_000,
+          });
+          await page.waitForTimeout(1_000);
+
+          const html = await page.content();
 
           // PDF linkini çıkar: href="/Uploads/Gunluk_Bulten_-_14.04.2026_13520.pdf"
           const pdfMatch = html.match(/href="([^"]*\.pdf)"/);
@@ -129,6 +144,8 @@ export class DenizYatirimScraper extends BaseScraper {
         // Rate limiting
         await new Promise((r) => setTimeout(r, CONFIG.requestDelay));
       }
+
+      await page.close();
     } finally {
       await context.close();
     }
